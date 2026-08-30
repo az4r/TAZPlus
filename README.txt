@@ -16,8 +16,7 @@
 ####     UŻYTKOWANIE:     ####
 ##############################
 
-1. Program bezpośrednio po instalacji nie ingeruje w otwierane pliki.
-2. Aby uruchomić nakładkę należy nacisnąć zielony przycisk gotowości znajdujący się w lewej części paska narzędzi i zezwolić na wczytanie wszystkich niezbędnych skryptów.
+1. Aby uruchomić nakładkę należy nacisnąć zielony przycisk gotowości znajdujący się w lewej części paska narzędzi i zezwolić na wczytanie wszystkich niezbędnych skryptów.
 
 ##############################
 ####    DEZINSTALACJA:    ####
@@ -51,8 +50,7 @@
 ####    HOW TO USE:    ####
 ###########################
 
-1. The program does not interfere with the opened files right after installation.
-2. Simply push the green standby button located on the left side of the toolbar and allow to load all necessary scripts.
+1. Simply push the green standby button located on the left side of the toolbar and allow to load all necessary scripts.
 
 ###########################
 #### HOW TO UNINSTALL: ####
