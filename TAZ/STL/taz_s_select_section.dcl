@@ -1,5 +1,5 @@
 taz_s_select_section : dialog {
-    label = "Wybór profilu";
+    label = "TAZ - Wybor profilu";
 
     : boxed_column {
 

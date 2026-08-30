@@ -1,5 +1,5 @@
 taz_s_move_copy_dialog : dialog {
-  label = "Move / Copy";
+  label = "TAZ - Przesun lub kopiuj";
 
   : column {
 

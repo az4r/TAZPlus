@@ -1,5 +1,5 @@
 taz_s_axes_dialog : dialog {
-  label = "Osie modelu";
+  label = "TAZ - Osie modelu";
 
   : column {
 
@@ -10,7 +10,7 @@ taz_s_axes_dialog : dialog {
 
         : row {
           : text { label="Nazwa"; width=10; }
-          : text { label="Odległość"; width=12; }
+          : text { label="Odleglosc"; width=12; }
         }
 
         : row {
@@ -21,7 +21,7 @@ taz_s_axes_dialog : dialog {
 
         : list_box { key="taz_s_x_list"; width=30; height=8; }
 
-        : button { key="taz_s_x_clear"; label="Wyczyść"; }
+        : button { key="taz_s_x_clear"; label="Wyczysc"; }
       }
 
       : boxed_column {
@@ -29,7 +29,7 @@ taz_s_axes_dialog : dialog {
 
         : row {
           : text { label="Nazwa"; width=10; }
-          : text { label="Odległość"; width=12; }
+          : text { label="Odleglosc"; width=12; }
         }
 
         : row {
@@ -40,7 +40,7 @@ taz_s_axes_dialog : dialog {
 
         : list_box { key="taz_s_y_list"; width=30; height=8; }
 
-        : button { key="taz_s_y_clear"; label="Wyczyść"; }
+        : button { key="taz_s_y_clear"; label="Wyczysc"; }
       }
 
       : boxed_column {
@@ -48,7 +48,7 @@ taz_s_axes_dialog : dialog {
 
         : row {
           : text { label="Nazwa"; width=10; }
-          : text { label="Odległość"; width=12; }
+          : text { label="Odleglosc"; width=12; }
         }
 
         : row {
@@ -59,7 +59,7 @@ taz_s_axes_dialog : dialog {
 
         : list_box { key="taz_s_z_list"; width=30; height=8; }
 
-        : button { key="taz_s_z_clear"; label="Wyczyść"; }
+        : button { key="taz_s_z_clear"; label="Wyczysc"; }
       }
 
     }
@@ -76,7 +76,7 @@ taz_s_axes_dialog : dialog {
 
       : toggle {
         key = "taz_s_draw_labels";
-        label = "Pokaż opisy osi";
+        label = "Pokaz opisy osi";
         value = "1";
       }
     }

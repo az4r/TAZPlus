@@ -1,5 +1,5 @@
 taz_s_edit_attributes_dialog : dialog {
-  label = "TAZ - Edycja Atrybutów";
+  label = "TAZ - Edycja Atrybutow";
 
   : column {
 

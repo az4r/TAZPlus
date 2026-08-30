@@ -7,7 +7,7 @@ taz_s_project_parameters_dialog : dialog {
       alignment = centered;
 
       : text {
-        label = "Ciężar objętościowy stali [kg/m3]:";
+        label = "Ciezar objetosciowy stali [kg/m3]:";
         width = 38;
         fixed_width = true;
       }
@@ -23,7 +23,7 @@ taz_s_project_parameters_dialog : dialog {
       alignment = centered;
 
       : text {
-        label = "Ciężar objętościowy betonu [kg/m3]:";
+        label = "Ciezar objetosciowy betonu [kg/m3]:";
         width = 38;
         fixed_width = true;
       }
@@ -39,7 +39,7 @@ taz_s_project_parameters_dialog : dialog {
       alignment = centered;
 
       : text {
-        label = "Naddatek na połączenia [%]:";
+        label = "Naddatek na polaczenia [%]:";
         width = 38;
         fixed_width = true;
       }
