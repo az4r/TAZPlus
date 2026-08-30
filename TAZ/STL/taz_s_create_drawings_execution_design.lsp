@@ -5400,6 +5400,14 @@
           taz_s_organize_layout_layout_data
         )
       )
+      
+      (setq taz_s_organize_layout_layout_data
+        (taz_s_organize_layout_set_dxf
+          7
+          "taz.ctb"
+          taz_s_organize_layout_layout_data
+        )
+      )
 
       ;; Dla standardowych A0-A4 wybieramy wariant ISO FULL BLEED.
       (if taz_s_organize_layout_full_bleed_paper_name
