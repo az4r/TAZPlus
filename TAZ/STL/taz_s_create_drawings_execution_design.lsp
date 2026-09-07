@@ -1203,6 +1203,7 @@
     (while (< taz_s_ei taz_s_total_elems)
       (setq taz_s_target_ent (nth taz_s_ei taz_s_elems_list))
       (setq taz_s_orig_ent (nth taz_s_ei taz_s_orig_enames))
+      (setq taz_s_orig_layer (cdr (assoc 8 (entget taz_s_orig_ent))))
       ;; --- SPRAWDZENIE CZY WYSTEPUJE PRZECIECIE (-INTERFERE) ---
       ;; Kopiujemy bryle tnaca na miejsce oryginalu (bez zoffset),
       ;; sprawdzamy przeciecie wzgledem ORYGINALU, potem kasujemy kopie.
@@ -1228,6 +1229,9 @@
           (if taz_s_layer0_ss
             (command "ERASE" taz_s_layer0_ss "")
           )
+          ;; taz_s_xref: geometria jest cieta normalnie, ale bez danych i etykiety
+          (if (/= (strcase taz_s_orig_layer) "TAZ_S_XREF")
+            (progn
           (setq taz_s_visible_handles
             (append taz_s_visible_handles
               (list (cdr (assoc 5 (entget taz_s_orig_ent))))
@@ -1350,6 +1354,8 @@
             ((= taz_s_case "Y")
              (command "_.ROTATE3D" (entlast) "" "Y" taz_s_annotation_ins_pt "90")
              (command "_.ROTATE3D" (entlast) "" "X" taz_s_annotation_ins_pt "90")
+            )
+          )
             )
           )
         )
@@ -1740,8 +1746,12 @@
     (setq taz_s_izo_orig_ent (car taz_s_izo_orig_tmp))
     (setq taz_s_izo_orig_data (entget taz_s_izo_orig_ent))
     (setq taz_s_izo_orig_type (cdr (assoc 0 taz_s_izo_orig_data)))
+    (setq taz_s_izo_orig_layer (cdr (assoc 8 taz_s_izo_orig_data)))
 
-    (if (= taz_s_izo_orig_type "3DSOLID")
+    (if (and
+          (= taz_s_izo_orig_type "3DSOLID")
+          (/= (strcase taz_s_izo_orig_layer) "TAZ_S_XREF")
+        )
       (progn
         (setq taz_s_izo_orig_h (cdr (assoc 5 taz_s_izo_orig_data)))
 
@@ -2193,8 +2203,12 @@
     (setq taz_s_izo_orig_ent (car taz_s_izo_orig_tmp))
     (setq taz_s_izo_orig_data (entget taz_s_izo_orig_ent))
     (setq taz_s_izo_orig_type (cdr (assoc 0 taz_s_izo_orig_data)))
+    (setq taz_s_izo_orig_layer (cdr (assoc 8 taz_s_izo_orig_data)))
 
-    (if (= taz_s_izo_orig_type "3DSOLID")
+    (if (and
+          (= taz_s_izo_orig_type "3DSOLID")
+          (/= (strcase taz_s_izo_orig_layer) "TAZ_S_XREF")
+        )
       (progn
 
         (setq taz_s_izo_orig_h (cdr (assoc 5 taz_s_izo_orig_data)))

@@ -32,6 +32,7 @@
   (command "_LAYER" "_U" "taz_s_hidden" "")
   (command "_LAYER" "_U" "taz_s_labels" "")
   (command "_LAYER" "_U" "taz_s_frame" "")
+  (command "_LAYER" "_U" "taz_s_xref" "")
   
 )
 
@@ -48,6 +49,7 @@
   (command "_LAYER" "_LO" "taz_s_hidden" "")
   (command "_LAYER" "_LO" "taz_s_labels" "")
   (command "_LAYER" "_LO" "taz_s_frame" "")
+  (command "_LAYER" "_LO" "taz_s_xref" "")
 )
 
 ;; ---------------------------------------------------------
@@ -224,6 +226,10 @@
   (if (tblsearch "LAYER" "taz_s_frame")
     (princ)
     (command "_LAYER" "_M" "taz_s_frame" "_C" "7" "" "_LO" "taz_s_frame" "")
+  )
+  (if (tblsearch "LAYER" "taz_s_xref")
+    (princ)
+    (command "_LAYER" "_M" "taz_s_xref" "_C" "7" "" "_LO" "taz_s_xref" "")
   )
 
   ;; ---------------------------------------------------------
