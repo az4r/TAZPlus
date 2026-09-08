@@ -33,7 +33,9 @@
   (command "_LAYER" "_U" "taz_s_labels" "")
   (command "_LAYER" "_U" "taz_s_frame" "")
   (command "_LAYER" "_U" "taz_s_xref" "")
-  
+  (command "_LAYER" "_U" "taz_s_xref_editing_layer" "")
+  (command "_LAYER" "_U" "taz_s_xref_visible" "")
+  (command "_LAYER" "_U" "taz_s_xref_hidden" "")  
 )
 
 ;; ---------------------------------------------------------
@@ -50,6 +52,9 @@
   (command "_LAYER" "_LO" "taz_s_labels" "")
   (command "_LAYER" "_LO" "taz_s_frame" "")
   (command "_LAYER" "_LO" "taz_s_xref" "")
+  (command "_LAYER" "_LO" "taz_s_xref_editing_layer" "")
+  (command "_LAYER" "_LO" "taz_s_xref_visible" "")
+  (command "_LAYER" "_LO" "taz_s_xref_hidden" "")
 )
 
 ;; ---------------------------------------------------------
@@ -230,6 +235,18 @@
   (if (tblsearch "LAYER" "taz_s_xref")
     (princ)
     (command "_LAYER" "_M" "taz_s_xref" "_C" "7" "" "_LO" "taz_s_xref" "")
+  )
+  (if (tblsearch "LAYER" "taz_s_xref_editing_layer")
+    (princ)
+    (command "_LAYER" "_M" "taz_s_xref_editing_layer" "_C" "1" "" "_LO" "taz_s_xref_editing_layer" "")
+  )
+  (if (tblsearch "LAYER" "taz_s_xref_visible")
+    (princ)
+    (command "_LAYER" "_M" "taz_s_xref_visible" "_C" "51" "" "_LO" "taz_s_xref_visible" "")
+  )
+  (if (tblsearch "LAYER" "taz_s_xref_hidden")
+    (princ)
+    (command "_LAYER" "_M" "taz_s_xref_hidden" "_C" "51" "" "_LT" "HIDDEN" "" "_LO" "taz_s_xref_hidden" "")
   )
 
   ;; ---------------------------------------------------------

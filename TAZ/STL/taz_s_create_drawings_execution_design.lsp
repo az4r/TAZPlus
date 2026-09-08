@@ -8,7 +8,7 @@
           (cdr (assoc 2 taz_s_layer_rec))
     )
 
-    ;; PH* -> taz_s_hidden
+    ;; PH* -> taz_s_hidden / taz_s_xref_hidden
     (if (= "PH"
            (strcase
              (substr
@@ -60,7 +60,7 @@
 
               (entmod
                 (subst
-                  (cons 8 "taz_s_hidden")
+                  (cons 8 (if taz_s_solprof_xref_mode "taz_s_xref_hidden" "taz_s_hidden"))
                   (assoc 8 taz_s_edata)
                   taz_s_edata
                 )
@@ -72,7 +72,7 @@
       )
     )
 
-    ;; PV* -> taz_s_visible
+    ;; PV* -> taz_s_visible / taz_s_xref_visible
     (if (= "PV"
            (strcase
              (substr
@@ -124,7 +124,7 @@
 
               (entmod
                 (subst
-                  (cons 8 "taz_s_visible")
+                  (cons 8 (if taz_s_solprof_xref_mode "taz_s_xref_visible" "taz_s_visible"))
                   (assoc 8 taz_s_edata)
                   taz_s_edata
                 )
@@ -974,6 +974,13 @@
   )
 
   ;; ---------------------------------
+  ;; WARSTWA ROBOCZA XREF
+  ;; taz_s_xref_editing_layer jest tworzona przez inny skrypt
+  ;; ---------------------------------
+
+  (setq taz_s_solprof_xref_mode nil)
+
+  ;; ---------------------------------
   ;; CZYSZCZENIE WARSTWY execution_design
   ;; ---------------------------------
 
@@ -997,6 +1004,17 @@
   )
 
   ;; ---------------------------------
+  ;; CZYSZCZENIE WARSTWY xref_editing_layer
+  ;; ---------------------------------
+
+  (setq taz_s_ss
+    (ssget "X" '((8 . "taz_s_xref_editing_layer")))
+  )
+  (if taz_s_ss
+    (command "ERASE" taz_s_ss "")
+  )
+
+  ;; ---------------------------------
   ;; SELEKCJA ORYGINALU - raz, przed wszystkimi petlami
   ;;
   ;; Zbieramy enames oryginalu teraz gdy w rysunku sa tylko:
@@ -1013,6 +1031,7 @@
         (cons -4 "<NOT") (cons 8 "taz_s_axes")             (cons -4 "NOT>")
         (cons -4 "<NOT") (cons 8 "taz_s_execution_design") (cons -4 "NOT>")
         (cons -4 "<NOT") (cons 8 "taz_s_editing_layer")    (cons -4 "NOT>")
+        (cons -4 "<NOT") (cons 8 "taz_s_xref_editing_layer") (cons -4 "NOT>")
         (cons -4 "AND>")
       )
     )
@@ -1181,8 +1200,8 @@
   ;;   taz_s_cut_ename  - ename bryly tnacej (wzorzec)
   ;;   taz_s_elems_list - lista ename elementow kopii do obrobki
   ;;
-  ;; Przed kazdym intersectem ustawia warstwe na taz_s_editing_layer
-  ;; dzieki czemu wyniki intersect trafiaja na te warstwe.
+  ;; Przed INTERSECT rozdziela wyniki na taz_s_execution_design
+  ;; albo taz_s_xref_editing_layer, zależnie od warstwy oryginalu.
   ;; Dla wszystkich elementow oprocz ostatniego: kopiuje bryle tnaca
   ;; w to samo miejsce i uzywa duplikatu. Ostatni element: uzywa
   ;; oryginalnej bryly tnacej bezposrednio (oszczednosc jednego COPY).
@@ -1370,8 +1389,16 @@
       (setq taz_s_cut_work_ent (entlast))
       (setvar "CLAYER" "taz_s_editing_layer")
       (setq taz_s_int_ss (ssadd))
-      (ssadd taz_s_cut_work_ent taz_s_int_ss)      
+      (ssadd taz_s_cut_work_ent taz_s_int_ss)
       (ssadd taz_s_target_ent   taz_s_int_ss)
+
+      ;; xref ma osobna warstwe robocza, zeby SOLPROF mogl go obsluzyc osobno
+      (if (= (strcase taz_s_orig_layer) "TAZ_S_XREF")
+        (setq taz_s_intersect_layer "taz_s_xref_editing_layer")
+        (setq taz_s_intersect_layer "taz_s_execution_design")
+      )
+      (command "_.CHPROP" taz_s_int_ss "" "LA" taz_s_intersect_layer "")
+
       (command "INTERSECT" taz_s_int_ss "")
       (setq taz_s_ei (+ taz_s_ei 1))
     )
@@ -1403,6 +1430,7 @@
           (cons -4 "<NOT") (cons 8 "taz_s_axes")             (cons -4 "NOT>")
           (cons -4 "<NOT") (cons 8 "taz_s_execution_design") (cons -4 "NOT>")
           (cons -4 "<NOT") (cons 8 "taz_s_editing_layer")    (cons -4 "NOT>")
+          (cons -4 "<NOT") (cons 8 "taz_s_xref_editing_layer") (cons -4 "NOT>")
           (cons -4 "AND>")
         )
       )
@@ -1644,7 +1672,7 @@
   ;;   1. Narysuj bryle tnaca w strefie Z tego przypadku
   ;;   2. Skopiuj oryginalny model do tej samej strefy Z
   ;;   3. Zbierz enames kopii (bez oryginalu, bez pomocniczych warstw)
-  ;;   4. Intersect parami (wyniki na taz_s_editing_layer)
+  ;;   4. Intersect parami (zwykle -> execution_design, xref -> xref_editing_layer)
   ;; =================================================================
 
   ;; ---------------------------------
@@ -1970,17 +1998,29 @@
   ;; Zbierz tylko skopiowane bryly 3DSOLID
   (setq taz_s_izo_enames (taz_s_collect_copy_enames))
   (setq taz_s_izo_ss (ssadd))
+  (setq taz_s_izo_normal_ss (ssadd))
+  (setq taz_s_izo_xref_ss (ssadd))
   (setq taz_s_izo_tmp taz_s_izo_enames)
 
   (while taz_s_izo_tmp
-    (ssadd (car taz_s_izo_tmp) taz_s_izo_ss)
+    (setq taz_s_izo_copy_ent (car taz_s_izo_tmp))
+    (setq taz_s_izo_copy_layer (cdr (assoc 8 (entget taz_s_izo_copy_ent))))
+    (ssadd taz_s_izo_copy_ent taz_s_izo_ss)
+
+    (if (= (strcase taz_s_izo_copy_layer) "TAZ_S_XREF")
+      (ssadd taz_s_izo_copy_ent taz_s_izo_xref_ss)
+      (ssadd taz_s_izo_copy_ent taz_s_izo_normal_ss)
+    )
+
     (setq taz_s_izo_tmp (cdr taz_s_izo_tmp))
   )
 
-  ;; SOLPROF w dalszej czesci skryptu pracuje na tej warstwie,
-  ;; dlatego tylko kopie IZO przenosimy tymczasowo na execution_design.
-  (if (> (sslength taz_s_izo_ss) 0)
-    (command "_.CHPROP" taz_s_izo_ss "" "LA" "taz_s_execution_design" "")
+  ;; Zwykle bryly i xref ida do SOLPROF osobno.
+  (if (> (sslength taz_s_izo_normal_ss) 0)
+    (command "_.CHPROP" taz_s_izo_normal_ss "" "LA" "taz_s_execution_design" "")
+  )
+  (if (> (sslength taz_s_izo_xref_ss) 0)
+    (command "_.CHPROP" taz_s_izo_xref_ss "" "LA" "taz_s_xref_editing_layer" "")
   )
 
   ;; -------------------------------------------------------
@@ -2297,10 +2337,31 @@
     (progn
       (command "_ZOOM" "_OBJECT" taz_s_izo_ss "")
       (command "-VIEW" "_S" taz_s_view_name)
+    )
+  )
+
+  ;; Najpierw zwykle elementy -> hidden / visible
+  (if (> (sslength taz_s_izo_normal_ss) 0)
+    (progn
       (command "_.SOLPROF")
-      (command taz_s_izo_ss)
+      (command taz_s_izo_normal_ss)
       (command "" "_Y" "_Y" "_Y")
-      (command "_.ERASE" taz_s_izo_ss "")
+      (command "_.ERASE" taz_s_izo_normal_ss "")
+      (setq taz_s_solprof_xref_mode nil)
+      (taz_s_merge_solprof_layers)
+    )
+  )
+
+  ;; Potem podklad -> PH* na taz_s_xref_hidden, PV* na taz_s_xref_visible
+  (if (> (sslength taz_s_izo_xref_ss) 0)
+    (progn
+      (command "_.SOLPROF")
+      (command taz_s_izo_xref_ss)
+      (command "" "_Y" "_Y" "_Y")
+      (command "_.ERASE" taz_s_izo_xref_ss "")
+      (setq taz_s_solprof_xref_mode T)
+      (taz_s_merge_solprof_layers)
+      (setq taz_s_solprof_xref_mode nil)
     )
   )
 
@@ -2345,7 +2406,8 @@
       (command "_.CIRCLE" (list taz_s_x taz_s_y (- (+ taz_s_zmin taz_s_zoffset) taz_s_circle_radius)) taz_s_circle_radius)
       (setq taz_s_circle_center (list taz_s_x taz_s_y (- (+ taz_s_zmin taz_s_zoffset) taz_s_circle_radius)))
       (command "_.ROTATE3D" (entlast) "" "X" taz_s_circle_center "90")
-      (command "_.CHPROP" (entlast) "" "LA" "taz_s_axes" "")
+      (command "_.CHPROP" (entlast) "" "_LA" "taz_s_axes" "_LT" "Continuous" "")
+      ;;(command "_.CHPROP" (entlast) "" "LA" "taz_s_axes" "")
       (command "_.TEXT" "_J" "_MC" taz_s_circle_center taz_s_annotation_scale_axis 0 taz_s_axis_name)
       (command "_.ROTATE3D" (entlast) "" "X" taz_s_circle_center "90")
       (command "_.CHPROP" (entlast) "" "LA" "taz_s_axes" "")
@@ -2470,11 +2532,32 @@
     (command "_PLAN" "_C")
     ;;(command "_REGEN")
     
-    (setq taz_s_solprof_ss (ssget "_X" (list (cons 8 "taz_s_execution_design"))))    
-    (command "_.SOLPROF")
-    (command taz_s_solprof_ss)
-    (command "" "_Y" "_Y" "_Y")
-    (command "_.ERASE" (ssget "_X" (list (cons 8 "taz_s_execution_design"))) "")
+    ;; Zwykle elementy -> hidden / visible
+    (setq taz_s_solprof_ss (ssget "_X" (list (cons 8 "taz_s_execution_design"))))
+    (if taz_s_solprof_ss
+      (progn
+        (command "_.SOLPROF")
+        (command taz_s_solprof_ss)
+        (command "" "_Y" "_Y" "_Y")
+        (command "_.ERASE" taz_s_solprof_ss "")
+        (setq taz_s_solprof_xref_mode nil)
+        (taz_s_merge_solprof_layers)
+      )
+    )
+
+    ;; Podklad -> PH* na taz_s_xref_hidden, PV* na taz_s_xref_visible
+    (setq taz_s_solprof_xref_ss (ssget "_X" (list (cons 8 "taz_s_xref_editing_layer"))))
+    (if taz_s_solprof_xref_ss
+      (progn
+        (command "_.SOLPROF")
+        (command taz_s_solprof_xref_ss)
+        (command "" "_Y" "_Y" "_Y")
+        (command "_.ERASE" taz_s_solprof_xref_ss "")
+        (setq taz_s_solprof_xref_mode T)
+        (taz_s_merge_solprof_layers)
+        (setq taz_s_solprof_xref_mode nil)
+      )
+    )
     (command "_pspace")
     (command "_layout" "_S" "Model")
     
@@ -2516,7 +2599,8 @@
       (command "_.CIRCLE" (list taz_s_x taz_s_y (- (+ taz_s_zmin taz_s_zoffset) taz_s_circle_radius)) taz_s_circle_radius)
       (setq taz_s_circle_center (list taz_s_x taz_s_y (- (+ taz_s_zmin taz_s_zoffset) taz_s_circle_radius)))
       (command "_.ROTATE3D" (entlast) "" "Y" taz_s_circle_center "90")
-      (command "_.CHPROP" (entlast) "" "LA" "taz_s_axes" "")
+      (command "_.CHPROP" (entlast) "" "_LA" "taz_s_axes" "_LT" "Continuous" "")
+      ;;(command "_.CHPROP" (entlast) "" "LA" "taz_s_axes" "")
       (command "_.TEXT" "_J" "_MC" taz_s_circle_center taz_s_annotation_scale_axis 90 taz_s_axis_name)
       (command "_.ROTATE3D" (entlast) "" "Y" taz_s_circle_center "90")
       (command "_.CHPROP" (entlast) "" "LA" "taz_s_axes" "")
@@ -2636,11 +2720,32 @@
     (command "_PLAN" "_C")
     ;;(command "_REGEN")
     
-    (setq taz_s_solprof_ss (ssget "_X" (list (cons 8 "taz_s_execution_design"))))    
-    (command "_.SOLPROF")
-    (command taz_s_solprof_ss)
-    (command "" "_Y" "_Y" "_Y")
-    (command "_.ERASE" (ssget "_X" (list (cons 8 "taz_s_execution_design"))) "")
+    ;; Zwykle elementy -> hidden / visible
+    (setq taz_s_solprof_ss (ssget "_X" (list (cons 8 "taz_s_execution_design"))))
+    (if taz_s_solprof_ss
+      (progn
+        (command "_.SOLPROF")
+        (command taz_s_solprof_ss)
+        (command "" "_Y" "_Y" "_Y")
+        (command "_.ERASE" taz_s_solprof_ss "")
+        (setq taz_s_solprof_xref_mode nil)
+        (taz_s_merge_solprof_layers)
+      )
+    )
+
+    ;; Podklad -> PH* na taz_s_xref_hidden, PV* na taz_s_xref_visible
+    (setq taz_s_solprof_xref_ss (ssget "_X" (list (cons 8 "taz_s_xref_editing_layer"))))
+    (if taz_s_solprof_xref_ss
+      (progn
+        (command "_.SOLPROF")
+        (command taz_s_solprof_xref_ss)
+        (command "" "_Y" "_Y" "_Y")
+        (command "_.ERASE" taz_s_solprof_xref_ss "")
+        (setq taz_s_solprof_xref_mode T)
+        (taz_s_merge_solprof_layers)
+        (setq taz_s_solprof_xref_mode nil)
+      )
+    )
     (command "_pspace")
     (command "_layout" "_S" "Model")
     
@@ -2689,7 +2794,8 @@
                   (- taz_s_ymin taz_s_circle_radius)
                   (+ taz_s_z taz_s_zoffset)))
       (command "_.CIRCLE" taz_s_circle_center taz_s_circle_radius)
-      (command "_.CHPROP" (entlast) "" "LA" "taz_s_axes" "")
+      (command "_.CHPROP" (entlast) "" "_LA" "taz_s_axes" "_LT" "Continuous" "")
+      ;;(command "_.CHPROP" (entlast) "" "LA" "taz_s_axes" "")
       (command "_.TEXT" "_J" "_MC" taz_s_circle_center taz_s_annotation_scale_axis 0 taz_s_axis_name)
       (command "_.CHPROP" (entlast) "" "LA" "taz_s_axes" "")
       ;; górne kółko
@@ -2698,7 +2804,8 @@
                   (+ taz_s_ymax taz_s_circle_radius)
                   (+ taz_s_z taz_s_zoffset)))
       (command "_.CIRCLE" taz_s_circle_center taz_s_circle_radius)
-      (command "_.CHPROP" (entlast) "" "LA" "taz_s_axes" "")
+      (command "_.CHPROP" (entlast) "" "_LA" "taz_s_axes" "_LT" "Continuous" "")
+      ;;(command "_.CHPROP" (entlast) "" "LA" "taz_s_axes" "")
       (command "_.TEXT" "_J" "_MC" taz_s_circle_center taz_s_annotation_scale_axis 0 taz_s_axis_name)
       (command "_.CHPROP" (entlast) "" "LA" "taz_s_axes" "")
     )
@@ -2724,7 +2831,8 @@
                   taz_s_y
                   (+ taz_s_z taz_s_zoffset)))
       (command "_.CIRCLE" taz_s_circle_center taz_s_circle_radius)
-      (command "_.CHPROP" (entlast) "" "LA" "taz_s_axes" "")
+      (command "_.CHPROP" (entlast) "" "_LA" "taz_s_axes" "_LT" "Continuous" "")
+      ;;(command "_.CHPROP" (entlast) "" "LA" "taz_s_axes" "")
       (command "_.TEXT" "_J" "_MC" taz_s_circle_center taz_s_annotation_scale_axis 0 taz_s_axis_name)
       (command "_.CHPROP" (entlast) "" "LA" "taz_s_axes" "")
       ;; prawe kółko
@@ -2733,7 +2841,8 @@
                   taz_s_y
                   (+ taz_s_z taz_s_zoffset)))
       (command "_.CIRCLE" taz_s_circle_center taz_s_circle_radius)
-      (command "_.CHPROP" (entlast) "" "LA" "taz_s_axes" "")
+      (command "_.CHPROP" (entlast) "" "_LA" "taz_s_axes" "_LT" "Continuous" "")
+      ;;(command "_.CHPROP" (entlast) "" "LA" "taz_s_axes" "")
       (command "_.TEXT" "_J" "_MC" taz_s_circle_center taz_s_annotation_scale_axis 0 taz_s_axis_name)
       (command "_.CHPROP" (entlast) "" "LA" "taz_s_axes" "")
     )
@@ -2850,17 +2959,39 @@
     (command "_PLAN" "_C")
     ;;(command "_REGEN")
     
-    (setq taz_s_solprof_ss (ssget "_X" (list (cons 8 "taz_s_execution_design"))))    
-    (command "_.SOLPROF")
-    (command taz_s_solprof_ss)
-    (command "" "_Y" "_Y" "_Y")
-    (command "_.ERASE" (ssget "_X" (list (cons 8 "taz_s_execution_design"))) "")
+    ;; Zwykle elementy -> hidden / visible
+    (setq taz_s_solprof_ss (ssget "_X" (list (cons 8 "taz_s_execution_design"))))
+    (if taz_s_solprof_ss
+      (progn
+        (command "_.SOLPROF")
+        (command taz_s_solprof_ss)
+        (command "" "_Y" "_Y" "_Y")
+        (command "_.ERASE" taz_s_solprof_ss "")
+        (setq taz_s_solprof_xref_mode nil)
+        (taz_s_merge_solprof_layers)
+      )
+    )
+
+    ;; Podklad -> PH* na taz_s_xref_hidden, PV* na taz_s_xref_visible
+    (setq taz_s_solprof_xref_ss (ssget "_X" (list (cons 8 "taz_s_xref_editing_layer"))))
+    (if taz_s_solprof_xref_ss
+      (progn
+        (command "_.SOLPROF")
+        (command taz_s_solprof_xref_ss)
+        (command "" "_Y" "_Y" "_Y")
+        (command "_.ERASE" taz_s_solprof_xref_ss "")
+        (setq taz_s_solprof_xref_mode T)
+        (taz_s_merge_solprof_layers)
+        (setq taz_s_solprof_xref_mode nil)
+      )
+    )
     (command "_pspace")
     (command "_layout" "_S" "Model")
     
   )
 
   (command "-LAYDEL" "N" "taz_s_execution_design" "" "_Y")
+  (setq taz_s_solprof_xref_mode nil)
   (taz_s_merge_solprof_layers)
 
   ;; ---------------------------------
