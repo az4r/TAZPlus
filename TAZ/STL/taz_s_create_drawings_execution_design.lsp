@@ -1014,9 +1014,13 @@
   ;; ---------------------------------
   ;; KLASY ELEMENTOW
   ;;
-  ;; taz_s_beam / taz_s_plate = geometria z danymi
-  ;; taz_s_xref               = geometria referencyjna bez danych
-  ;; pozostale warstwy        = ignorowane przez generator
+  ;; 1) taz_s_beam / taz_s_plate = geometria z danymi
+  ;; 2) taz_s_axes                = osie, pomijane
+  ;; 3) kazdy inny 3DSOLID        = geometria referencyjna / podklad
+  ;;
+  ;; Podklad NIE jest zwiazany z konkretna nazwa warstwy. Moze lezec
+  ;; np. na 0, taz_s_xref albo dowolnej innej warstwie zrodlowej.
+  ;; Warstwy robocze generatora nie sa traktowane jako podklad.
   ;; ---------------------------------
 
   (defun taz_s_is_data_layer (taz_s_layer_name_arg)
@@ -1031,10 +1035,571 @@
 
   (defun taz_s_is_xref_layer (taz_s_layer_name_arg)
     (if taz_s_layer_name_arg
-      (= (strcase taz_s_layer_name_arg) "TAZ_S_XREF")
+      (and
+        (not (taz_s_is_data_layer taz_s_layer_name_arg))
+        (/= (strcase taz_s_layer_name_arg) "TAZ_S_AXES")
+        (/= (strcase taz_s_layer_name_arg) "TAZ_S_EXECUTION_DESIGN")
+        (/= (strcase taz_s_layer_name_arg) "TAZ_S_EDITING_LAYER")
+        (/= (strcase taz_s_layer_name_arg) "TAZ_S_XREF_EDITING_LAYER")
+      )
       nil
     )
   )
+
+
+  ;; ---------------------------------
+  ;; PODKLAD Z KRZYWYCH -> TYMCZASOWE 3DSOLID
+  ;;
+  ;; Obslugiwane sa tylko typowe obiekty geometryczne, ktore moga byc
+  ;; sciezka SWEEP:
+  ;;   LINE, ARC, CIRCLE, ELLIPSE, LWPOLYLINE, POLYLINE, SPLINE
+  ;;
+  ;; TEXT / MTEXT / INSERT / DIMENSION / HATCH i podobne obiekty sa
+  ;; celowo pomijane i nie biora udzialu w tym mechanizmie.
+  ;;
+  ;; Zasada jest celowo prosta:
+  ;;   1. odczytujemy dowolny latwo dostepny punkt krzywej,
+  ;;   2. w tym punkcie tworzymy zwykle CIRCLE o srednicy 0.001,
+  ;;      bez ustawiania go prostopadle do sciezki,
+  ;;   3. SWEEP ma Alignment=Yes, wiec GstarCAD sam dopasowuje profil
+  ;;      do kierunku sciezki,
+  ;;   4. zamkniety profil CIRCLE + tryb Solid daje prawdziwy 3DSOLID,
+  ;;   5. dalej generator traktuje ten obiekt jak kazdy inny solid podkladu.
+  ;;
+  ;; Bez VL / VLA / VLAX / COM.
+  ;; ---------------------------------
+
+  (setq taz_s_xref_sweep_diameter 0.01)
+  (setq taz_s_xref_sweep_radius (/ taz_s_xref_sweep_diameter 2.0))
+
+  (defun taz_s_is_sweepable_xref_curve (taz_s_curve_ent / taz_s_curve_ed taz_s_curve_type taz_s_curve_layer)
+    (if (and taz_s_curve_ent (entget taz_s_curve_ent))
+      (progn
+        (setq taz_s_curve_ed (entget taz_s_curve_ent))
+        (setq taz_s_curve_type (cdr (assoc 0 taz_s_curve_ed)))
+        (setq taz_s_curve_layer (cdr (assoc 8 taz_s_curve_ed)))
+        (and
+          (member taz_s_curve_type
+            '("LINE" "ARC" "CIRCLE" "ELLIPSE" "LWPOLYLINE" "POLYLINE" "SPLINE")
+          )
+          (taz_s_is_xref_layer taz_s_curve_layer)
+        )
+      )
+      nil
+    )
+  )
+
+  ;; Iloczyn wektorowy - potrzebny tylko do wyznaczenia dowolnego
+  ;; rzeczywistego punktu ELLIPSE. Nie sluzy do ustawiania profilu.
+  (defun taz_s_cross3 (taz_s_a taz_s_b)
+    (list
+      (- (* (cadr taz_s_a) (caddr taz_s_b)) (* (caddr taz_s_a) (cadr taz_s_b)))
+      (- (* (caddr taz_s_a) (car taz_s_b)) (* (car taz_s_a) (caddr taz_s_b)))
+      (- (* (car taz_s_a) (cadr taz_s_b)) (* (cadr taz_s_a) (car taz_s_b)))
+    )
+  )
+
+  ;; Zwraca dowolny praktyczny punkt nalezacy do / opisujacy krzywa.
+  ;; Dla SPLINE: najpierw bierzemy pierwszy FIT POINT (DXF 11), a gdy
+  ;; go nie ma - pierwszy CONTROL POINT (DXF 10). Kazdy poprawny SPLINE
+  ;; ma co najmniej punkty kontrolne, wiec nie wymagamy zadnego VL.
+  (defun taz_s_get_xref_curve_point
+    (taz_s_curve_ent
+      / taz_s_ed taz_s_type taz_s_p taz_s_c taz_s_r taz_s_a
+        taz_s_elev taz_s_vtx taz_s_major taz_s_minor taz_s_normal
+        taz_s_ratio taz_s_param)
+
+    (setq taz_s_p nil)
+    (if (and taz_s_curve_ent (entget taz_s_curve_ent))
+      (progn
+        (setq taz_s_ed (entget taz_s_curve_ent))
+        (setq taz_s_type (cdr (assoc 0 taz_s_ed)))
+
+        (cond
+          ;; Punkt poczatkowy linii jest zapisany bezposrednio w DXF 10.
+          ((= taz_s_type "LINE")
+            (setq taz_s_p (cdr (assoc 10 taz_s_ed)))
+          )
+
+          ;; Dla luku bierzemy jego rzeczywisty punkt startowy.
+          ((= taz_s_type "ARC")
+            (setq taz_s_c (cdr (assoc 10 taz_s_ed)))
+            (setq taz_s_r (cdr (assoc 40 taz_s_ed)))
+            (setq taz_s_a (cdr (assoc 50 taz_s_ed)))
+            (if (and taz_s_c taz_s_r taz_s_a)
+              (setq taz_s_p
+                (trans
+                  (list
+                    (+ (car taz_s_c) (* taz_s_r (cos taz_s_a)))
+                    (+ (cadr taz_s_c) (* taz_s_r (sin taz_s_a)))
+                    (caddr taz_s_c)
+                  )
+                  taz_s_curve_ent
+                  0
+                )
+              )
+            )
+          )
+
+          ;; Dla okregu wybieramy punkt na promieniu w lokalnym kierunku X.
+          ((= taz_s_type "CIRCLE")
+            (setq taz_s_c (cdr (assoc 10 taz_s_ed)))
+            (setq taz_s_r (cdr (assoc 40 taz_s_ed)))
+            (if (and taz_s_c taz_s_r)
+              (setq taz_s_p
+                (trans
+                  (list (+ (car taz_s_c) taz_s_r) (cadr taz_s_c) (caddr taz_s_c))
+                  taz_s_curve_ent
+                  0
+                )
+              )
+            )
+          )
+
+          ;; Punkt ELLIPSE dla jej parametru poczatkowego.
+          ;; DXF 10 = srodek, 11 = wektor osi glownej, 40 = stosunek osi,
+          ;; 41 = parametr poczatkowy, 210 = normalna.
+          ((= taz_s_type "ELLIPSE")
+            (setq taz_s_c (cdr (assoc 10 taz_s_ed)))
+            (setq taz_s_major (cdr (assoc 11 taz_s_ed)))
+            (setq taz_s_ratio (cdr (assoc 40 taz_s_ed)))
+            (setq taz_s_param (cdr (assoc 41 taz_s_ed)))
+            (setq taz_s_normal (cdr (assoc 210 taz_s_ed)))
+            (if (not taz_s_normal) (setq taz_s_normal '(0.0 0.0 1.0)))
+            (if (not taz_s_param) (setq taz_s_param 0.0))
+            (if (and taz_s_c taz_s_major taz_s_ratio)
+              (progn
+                (setq taz_s_minor
+                  (mapcar
+                    '(lambda (taz_s_q) (* taz_s_q taz_s_ratio))
+                    (taz_s_cross3 taz_s_normal taz_s_major)
+                  )
+                )
+                (setq taz_s_p
+                  (list
+                    (+ (car taz_s_c)
+                       (* (car taz_s_major) (cos taz_s_param))
+                       (* (car taz_s_minor) (sin taz_s_param)))
+                    (+ (cadr taz_s_c)
+                       (* (cadr taz_s_major) (cos taz_s_param))
+                       (* (cadr taz_s_minor) (sin taz_s_param)))
+                    (+ (caddr taz_s_c)
+                       (* (caddr taz_s_major) (cos taz_s_param))
+                       (* (caddr taz_s_minor) (sin taz_s_param)))
+                  )
+                )
+              )
+            )
+          )
+
+          ;; Pierwszy wierzcholek LWPOLYLINE. DXF 10 jest w OCS,
+          ;; dlatego dodajemy elewacje i transformujemy do WCS.
+          ((= taz_s_type "LWPOLYLINE")
+            (setq taz_s_p (cdr (assoc 10 taz_s_ed)))
+            (setq taz_s_elev (cdr (assoc 38 taz_s_ed)))
+            (if (not taz_s_elev) (setq taz_s_elev 0.0))
+            (if taz_s_p
+              (setq taz_s_p
+                (trans
+                  (list (car taz_s_p) (cadr taz_s_p) taz_s_elev)
+                  taz_s_curve_ent
+                  0
+                )
+              )
+            )
+          )
+
+          ;; Klasyczna POLYLINE przechowuje punkty w rekordach VERTEX.
+          ((= taz_s_type "POLYLINE")
+            (setq taz_s_vtx (entnext taz_s_curve_ent))
+            (while
+              (and
+                taz_s_vtx
+                (/= (cdr (assoc 0 (entget taz_s_vtx))) "VERTEX")
+                (/= (cdr (assoc 0 (entget taz_s_vtx))) "SEQEND")
+              )
+              (setq taz_s_vtx (entnext taz_s_vtx))
+            )
+            (if
+              (and
+                taz_s_vtx
+                (= (cdr (assoc 0 (entget taz_s_vtx))) "VERTEX")
+              )
+              (progn
+                (setq taz_s_p (cdr (assoc 10 (entget taz_s_vtx))))
+                (if taz_s_p
+                  (setq taz_s_p (trans taz_s_p taz_s_curve_ent 0))
+                )
+              )
+            )
+          )
+
+          ;; Wszystkie SPLINE: fit point jesli istnieje, inaczej control point.
+          ;; Nie wyznaczamy stycznej ani parametru krzywej.
+          ((= taz_s_type "SPLINE")
+            (setq taz_s_p (cdr (assoc 11 taz_s_ed)))
+            (if (not taz_s_p)
+              (setq taz_s_p (cdr (assoc 10 taz_s_ed)))
+            )
+          )
+        )
+      )
+    )
+    taz_s_p
+  )
+
+  (defun taz_s_create_xref_sweep_solid
+    (taz_s_path_ent
+      / taz_s_path_ed taz_s_path_layer taz_s_circle_center
+        taz_s_circle_ent taz_s_before_sweep taz_s_after_sweep
+        taz_s_after_ed taz_s_result_ent)
+
+    (setq taz_s_result_ent nil)
+
+    (if (taz_s_is_sweepable_xref_curve taz_s_path_ent)
+      (progn
+        (setq taz_s_path_ed (entget taz_s_path_ent))
+        (setq taz_s_path_layer (cdr (assoc 8 taz_s_path_ed)))
+        (setq taz_s_circle_center (taz_s_get_xref_curve_point taz_s_path_ent))
+
+        (if taz_s_circle_center
+          (progn
+            ;; Profil jest zwyklym kolem w plaszczyznie WCS.
+            ;; Celowo NIE ustawiamy jego normalnej do stycznej sciezki.
+            (setq taz_s_circle_ent
+              (entmakex
+                (list
+                  (cons 0 "CIRCLE")
+                  (cons 8 taz_s_path_layer)
+                  (cons 10 taz_s_circle_center)
+                  (cons 40 taz_s_xref_sweep_radius)
+                  (cons 210 '(0.0 0.0 1.0))
+                )
+              )
+            )
+
+            (if taz_s_circle_ent
+              (progn
+                ;; Przy profilu D=0.001 wymuszamy mocne zblizenie i REGEN.
+                (command "_ZOOM" "_OBJECT" taz_s_circle_ent "")
+                (command "_ZOOM" "_SCALE" "1000X")
+                (command "REGEN")
+
+                (setq taz_s_before_sweep (entlast))
+
+                ;; Zamkniety CIRCLE + tryb Solid = 3DSOLID.
+                ;; Alignment=Yes zostawiamy, aby GstarCAD sam dopasowal
+                ;; profil do kierunku sciezki.
+                (command "_.SWEEP" "_MO" "_SO" taz_s_circle_ent "" "_A" "_Y" taz_s_path_ent)
+
+                ;; Jesli konkretna krzywa pozostawila aktywny prompt,
+                ;; anulujemy tylko ten SWEEP i kontynuujemy kolejne obiekty.
+                (if (> (getvar "CMDACTIVE") 0)
+                  (command)
+                )
+
+                (setq taz_s_after_sweep (entlast))
+
+                (if
+                  (and
+                    taz_s_after_sweep
+                    (not (equal taz_s_after_sweep taz_s_before_sweep))
+                    (entget taz_s_after_sweep)
+                  )
+                  (progn
+                    (setq taz_s_after_ed (entget taz_s_after_sweep))
+                    (if (= (cdr (assoc 0 taz_s_after_ed)) "3DSOLID")
+                      (progn
+                        ;; Zachowujemy warstwe zrodlowej krzywej.
+                        (if (assoc 8 taz_s_after_ed)
+                          (entmod
+                            (subst
+                              (cons 8 taz_s_path_layer)
+                              (assoc 8 taz_s_after_ed)
+                              taz_s_after_ed
+                            )
+                          )
+                        )
+                        (setq taz_s_result_ent taz_s_after_sweep)
+                      )
+                    )
+                  )
+                )
+
+                ;; Profil pomocniczy usuwamy niezaleznie od wyniku SWEEP.
+                (if (entget taz_s_circle_ent)
+                  (entdel taz_s_circle_ent)
+                )
+              )
+            )
+          )
+        )
+      )
+    )
+
+    taz_s_result_ent
+  )
+
+  (defun taz_s_prepare_xref_curve_solids
+    (/ taz_s_curve_ss taz_s_curve_i taz_s_curve_ent
+       taz_s_old_delobj taz_s_created_count taz_s_failed_count)
+
+    (setq taz_s_created_count 0)
+    (setq taz_s_failed_count 0)
+
+    ;; Snapshot tylko typow, ktore swiadomie obslugujemy.
+    (setq taz_s_curve_ss
+      (ssget "_X"
+        (list
+          (cons -4 "<AND")
+          (cons 67 0)
+          (cons 0 "LINE,ARC,CIRCLE,ELLIPSE,LWPOLYLINE,POLYLINE,SPLINE")
+          (cons -4 "AND>")
+        )
+      )
+    )
+
+    ;; Oryginalne krzywe musza zostac do koncowego sprzatania.
+    (setq taz_s_old_delobj (getvar "DELOBJ"))
+    (setvar "DELOBJ" 0)
+
+    (if taz_s_curve_ss
+      (progn
+        (setq taz_s_curve_i 0)
+        (while (< taz_s_curve_i (sslength taz_s_curve_ss))
+          (setq taz_s_curve_ent (ssname taz_s_curve_ss taz_s_curve_i))
+
+          (if (taz_s_is_sweepable_xref_curve taz_s_curve_ent)
+            (if (taz_s_create_xref_sweep_solid taz_s_curve_ent)
+              (setq taz_s_created_count (1+ taz_s_created_count))
+              (setq taz_s_failed_count (1+ taz_s_failed_count))
+            )
+          )
+
+          (setq taz_s_curve_i (1+ taz_s_curve_i))
+        )
+      )
+    )
+
+    (setvar "DELOBJ" taz_s_old_delobj)
+
+    (if (> taz_s_created_count 0)
+      (princ
+        (strcat
+          "\nPodklad SWEEP: utworzono "
+          (itoa taz_s_created_count)
+          " tymczasowych 3DSOLID (profil D=0.001)."
+        )
+      )
+    )
+
+    (if (> taz_s_failed_count 0)
+      (princ
+        (strcat
+          "\nPodklad SWEEP: pominieto "
+          (itoa taz_s_failed_count)
+          " krzywych, dla ktorych SWEEP nie utworzyl 3DSOLID."
+        )
+      )
+    )
+
+    (princ)
+  )
+
+  ;; Konwersja odbywa sie PRZED taz_s_orig_cleanup_ss i taz_s_orig_ss.
+  ;; Tymczasowe solidy automatycznie trafia wiec do istniejacego toru:
+  ;; COPY -> INTERSECT -> SOLPROF -> xref visible / hidden,
+  ;; a na koniec zostana usuniete razem z oryginalnym modelem.
+
+  ;; ---------------------------------
+  ;; PRAWDZIWY DWG XREF -> BIND -> EXPLODE
+  ;;
+  ;; Celowo prosta logika, bez NCOPY / VL / VLA / VLAX:
+  ;;   1. znajdujemy bezposrednie INSERT-y bedace DWG XREF,
+  ;;   2. zapamietujemy ich nazwy i encje,
+  ;;   3. na czas BIND ustawiamy BINDTYPE=0,
+  ;;   4. -XREF BIND zamienia definicje XREF na zwykle bloki,
+  ;;   5. odblokowujemy warstwy i EXPLODE rozbija zapamietane INSERT-y,
+  ;;   6. dalej istniejacy kod obsluguje powstale 3DSOLID-y i krzywe.
+  ;;
+  ;; BINDTYPE=0 zachowuje unikalne nazwy warstw zaleznch od XREF,
+  ;; np. nazwa$0$taz_s_beam, zamiast laczyc je z lokalnym taz_s_beam.
+  ;; ---------------------------------
+
+  (defun taz_s_get_dwg_xref_name
+    (taz_s_xref_ent / taz_s_xref_ed taz_s_xref_name taz_s_xref_block taz_s_xref_flags)
+
+    (setq taz_s_xref_name nil)
+    (setq taz_s_xref_flags 0)
+
+    (if (and taz_s_xref_ent (entget taz_s_xref_ent))
+      (progn
+        (setq taz_s_xref_ed (entget taz_s_xref_ent))
+
+        (if (= (cdr (assoc 0 taz_s_xref_ed)) "INSERT")
+          (progn
+            (setq taz_s_xref_name (cdr (assoc 2 taz_s_xref_ed)))
+
+            (if taz_s_xref_name
+              (setq taz_s_xref_block (tblsearch "BLOCK" taz_s_xref_name))
+            )
+
+            (if taz_s_xref_block
+              (progn
+                (if (assoc 70 taz_s_xref_block)
+                  (setq taz_s_xref_flags (cdr (assoc 70 taz_s_xref_block)))
+                )
+
+                (if
+                  (or
+                    (/= (logand taz_s_xref_flags 4) 0)
+                    (/= (logand taz_s_xref_flags 8) 0)
+                  )
+                  taz_s_xref_name
+                  nil
+                )
+              )
+              nil
+            )
+          )
+          nil
+        )
+      )
+      nil
+    )
+  )
+
+  (defun taz_s_bind_explode_dwg_xrefs
+    (/ taz_s_xref_ss taz_s_xref_i taz_s_xref_ent taz_s_xref_name
+       taz_s_xref_items taz_s_xref_names taz_s_xref_pair
+       taz_s_xref_bound_count taz_s_xref_exploded_count taz_s_xref_failed_count
+       taz_s_old_bindtype)
+
+    (setq taz_s_xref_items nil)
+    (setq taz_s_xref_names nil)
+    (setq taz_s_xref_bound_count 0)
+    (setq taz_s_xref_exploded_count 0)
+    (setq taz_s_xref_failed_count 0)
+
+    ;; Snapshot wszystkich bezposrednich DWG XREF w Model Space.
+    ;; Najpierw zapamietujemy encje, zanim pierwszy BIND zmieni definicje bloku.
+    (setq taz_s_xref_ss
+      (ssget "_X"
+        (list
+          (cons -4 "<AND")
+          (cons 67 0)
+          (cons 0 "INSERT")
+          (cons -4 "AND>")
+        )
+      )
+    )
+
+    (if taz_s_xref_ss
+      (progn
+        (setq taz_s_xref_i 0)
+
+        (while (< taz_s_xref_i (sslength taz_s_xref_ss))
+          (setq taz_s_xref_ent (ssname taz_s_xref_ss taz_s_xref_i))
+          (setq taz_s_xref_name (taz_s_get_dwg_xref_name taz_s_xref_ent))
+
+          (if taz_s_xref_name
+            (progn
+              (setq taz_s_xref_items
+                (cons (cons taz_s_xref_ent taz_s_xref_name) taz_s_xref_items)
+              )
+
+              (if (not (member taz_s_xref_name taz_s_xref_names))
+                (setq taz_s_xref_names (cons taz_s_xref_name taz_s_xref_names))
+              )
+            )
+          )
+
+          (setq taz_s_xref_i (1+ taz_s_xref_i))
+        )
+      )
+    )
+
+    ;; Najpierw BIND kazdej definicji XREF tylko jeden raz.
+    ;; BINDTYPE=0 tylko na czas tego etapu, aby warstwy XREF pozostaly unikalne.
+    (setq taz_s_old_bindtype (getvar "BINDTYPE"))
+    (setvar "BINDTYPE" 0)
+
+    (while taz_s_xref_names
+      (setq taz_s_xref_name (car taz_s_xref_names))
+
+      (command "_.-XREF" "_BIND" taz_s_xref_name "")
+      (setq taz_s_xref_bound_count (1+ taz_s_xref_bound_count))
+
+      (setq taz_s_xref_names (cdr taz_s_xref_names))
+    )
+
+    ;; Po BIND warstwy zalezne sa juz lokalne. Odblokowujemy je przed EXPLODE,
+    ;; aby powstale obiekty mogly normalnie przejsc przez dalsza maszynke.
+    (command "_.-LAYER" "_UNLOCK" "*" "")
+
+    ;; Po BIND zapamietane INSERT-y sa juz zwyklymi blokami i mozna je rozbic.
+    (while taz_s_xref_items
+      (setq taz_s_xref_pair (car taz_s_xref_items))
+      (setq taz_s_xref_ent (car taz_s_xref_pair))
+
+      (if (and taz_s_xref_ent (entget taz_s_xref_ent))
+        (progn
+          (command "_.EXPLODE" taz_s_xref_ent "")
+
+          ;; Po udanym EXPLODE INSERT przestaje istniec.
+          (if (entget taz_s_xref_ent)
+            (setq taz_s_xref_failed_count (1+ taz_s_xref_failed_count))
+            (setq taz_s_xref_exploded_count (1+ taz_s_xref_exploded_count))
+          )
+        )
+        (setq taz_s_xref_failed_count (1+ taz_s_xref_failed_count))
+      )
+
+      (setq taz_s_xref_items (cdr taz_s_xref_items))
+    )
+
+    ;; Przywracamy ustawienie uzytkownika po zakonczeniu BIND + EXPLODE.
+    (setvar "BINDTYPE" taz_s_old_bindtype)
+
+    (if (> taz_s_xref_bound_count 0)
+      (princ
+        (strcat
+          "\nXREF BIND: zwiazano "
+          (itoa taz_s_xref_bound_count)
+          " definicji DWG."
+        )
+      )
+    )
+
+    (if (> taz_s_xref_exploded_count 0)
+      (princ
+        (strcat
+          "\nXREF EXPLODE: rozbito "
+          (itoa taz_s_xref_exploded_count)
+          " instancji DWG."
+        )
+      )
+    )
+
+    (if (> taz_s_xref_failed_count 0)
+      (princ
+        (strcat
+          "\nXREF EXPLODE: nie udalo sie rozbic "
+          (itoa taz_s_xref_failed_count)
+          " instancji DWG."
+        )
+      )
+    )
+
+    (princ)
+  )
+
+  ;; Najpierw BIND + EXPLODE prawdziwych DWG XREF, aby ich geometria stala sie
+  ;; zwyklymi obiektami modelu. Dopiero potem istniejaca funkcja zamienia
+  ;; obslugiwane krzywe na tymczasowe 3DSOLID-y przez SWEEP.
+  (taz_s_bind_explode_dwg_xrefs)
+
+  (taz_s_prepare_xref_curve_solids)
 
   ;; ---------------------------------
   ;; ORYGINAL DO KONCOWEGO SPRZATANIA
@@ -1062,11 +1627,12 @@
   ;; ---------------------------------
   ;; SELEKCJA ELEMENTOW DO GENEROWANIA
   ;;
-  ;; Tylko 3DSOLID na:
-  ;;   taz_s_beam  - element z danymi
-  ;;   taz_s_plate - element z danymi (gotowe na przyszlosc)
-  ;;   taz_s_xref  - geometria referencyjna bez danych
-  ;; Reszta jest ignorowana.
+  ;; Wszystkie 3DSOLID z modelu dzielimy na trzy grupy:
+  ;;   taz_s_beam / taz_s_plate -> elementy z danymi
+  ;;   taz_s_axes                -> pomijane
+  ;;   wszystkie inne warstwy   -> geometria referencyjna / podklad
+  ;;
+  ;; Wykluczamy dodatkowo warstwy robocze generatora.
   ;; ---------------------------------
 
   (setq taz_s_orig_ss
@@ -1075,11 +1641,10 @@
         (cons -4 "<AND")
         (cons 67 0)
         (cons 0 "3DSOLID")
-        (cons -4 "<OR")
-        (cons 8 "taz_s_beam")
-        (cons 8 "taz_s_plate")
-        (cons 8 "taz_s_xref")
-        (cons -4 "OR>")
+        (cons -4 "<NOT") (cons 8 "taz_s_axes")               (cons -4 "NOT>")
+        (cons -4 "<NOT") (cons 8 "taz_s_execution_design")   (cons -4 "NOT>")
+        (cons -4 "<NOT") (cons 8 "taz_s_editing_layer")      (cons -4 "NOT>")
+        (cons -4 "<NOT") (cons 8 "taz_s_xref_editing_layer") (cons -4 "NOT>")
         (cons -4 "AND>")
       )
     )
@@ -1142,7 +1707,7 @@
       )
 
       ;; Tylko beam / plate maja dane elementu.
-      ;; XREF jest kopiowany geometrycznie, ale nie oczekujemy po nim
+      ;; Podklad jest kopiowany geometrycznie, ale nie oczekujemy po nim
       ;; zadnych attr6 / attr7 / sweep_p1 / sweep_p2.
       (if (taz_s_is_data_layer taz_s_orig_layer_for_copy)
         (progn
@@ -1303,7 +1868,7 @@
 
       ;; Beam / plate maja dane, dlatego tylko dla nich sprawdzamy
       ;; widocznosc przez -INTERFERE i tworzymy etykiety / tabele.
-      ;; XREF pomija caly ten blok i idzie od razu do INTERSECT.
+      ;; Podklad pomija caly ten blok i idzie od razu do INTERSECT.
       (if (taz_s_is_data_layer taz_s_orig_layer)
         (progn
 
@@ -1476,7 +2041,7 @@
       (ssadd taz_s_target_ent   taz_s_int_ss)
 
       ;; Beam / plate -> zwykla geometria wykonawcza.
-      ;; XREF -> osobna geometria robocza do osobnego SOLPROF.
+      ;; Podklad -> osobna geometria robocza do osobnego SOLPROF.
       (if (taz_s_is_xref_layer taz_s_orig_layer)
         (setq taz_s_intersect_layer "taz_s_xref_editing_layer")
         (setq taz_s_intersect_layer "taz_s_execution_design")
@@ -1512,11 +2077,10 @@
           (cons -4 "<AND")
           (cons 67 0)
           (cons 0 "3DSOLID")
-          (cons -4 "<OR")
-          (cons 8 "taz_s_beam")
-          (cons 8 "taz_s_plate")
-          (cons 8 "taz_s_xref")
-          (cons -4 "OR>")
+          (cons -4 "<NOT") (cons 8 "taz_s_axes")               (cons -4 "NOT>")
+          (cons -4 "<NOT") (cons 8 "taz_s_execution_design")   (cons -4 "NOT>")
+          (cons -4 "<NOT") (cons 8 "taz_s_editing_layer")      (cons -4 "NOT>")
+          (cons -4 "<NOT") (cons 8 "taz_s_xref_editing_layer") (cons -4 "NOT>")
           (cons -4 "AND>")
         )
       )
@@ -2083,7 +2647,7 @@
   )
 
   ;; Zbierz tylko skopiowane bryly 3DSOLID i rozdziel je
-  ;; na elementy z danymi oraz geometrie referencyjna XREF.
+  ;; na elementy z danymi oraz geometrie referencyjna / podklad.
   (setq taz_s_izo_enames (taz_s_collect_copy_enames))
   (setq taz_s_izo_ss (ssadd))
   (setq taz_s_izo_normal_ss (ssadd))
@@ -2115,7 +2679,7 @@
     (command "_.CHPROP" taz_s_izo_normal_ss "" "LA" "taz_s_execution_design" "")
   )
 
-  ;; XREF idzie do osobnego SOLPROF.
+  ;; Podklad idzie do osobnego SOLPROF.
   (if (> (sslength taz_s_izo_xref_ss) 0)
     (command "_.CHPROP" taz_s_izo_xref_ss "" "LA" "taz_s_xref_editing_layer" "")
   )
@@ -2450,7 +3014,7 @@
     )
   )
 
-  ;; Potem XREF -> osobne warstwy xref_visible / xref_hidden.
+  ;; Potem podklad -> osobne warstwy xref_visible / xref_hidden.
   (if (> (sslength taz_s_izo_xref_ss) 0)
     (progn
       (setq taz_s_solprof_xref_mode T)
@@ -2646,7 +3210,7 @@
       )
     )
 
-    ;; XREF -> osobny SOLPROF.
+    ;; Podklad -> osobny SOLPROF.
     (setq taz_s_solprof_xref_ss
       (ssget "_X" (list (cons 8 "taz_s_xref_editing_layer")))
     )
@@ -2841,7 +3405,7 @@
       )
     )
 
-    ;; XREF -> osobny SOLPROF.
+    ;; Podklad -> osobny SOLPROF.
     (setq taz_s_solprof_xref_ss
       (ssget "_X" (list (cons 8 "taz_s_xref_editing_layer")))
     )
@@ -3087,7 +3651,7 @@
       )
     )
 
-    ;; XREF -> osobny SOLPROF.
+    ;; Podklad -> osobny SOLPROF.
     (setq taz_s_solprof_xref_ss
       (ssget "_X" (list (cons 8 "taz_s_xref_editing_layer")))
     )
@@ -3117,6 +3681,10 @@
   ;; ---------------------------------
 
   (command "_layout" "_S" "Model")
+
+  ;; Obiekty pochodzace z BIND moga nadal lezec na warstwach, ktore byly
+  ;; zablokowane w pliku XREF. Odblokowujemy wszystko tylko na czas sprzatania.
+  (command "_.-LAYER" "_UNLOCK" "*" "")
 
   (if taz_s_orig_cleanup_ss
     (command "_.ERASE" taz_s_orig_cleanup_ss "")
