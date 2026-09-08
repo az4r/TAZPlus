@@ -973,11 +973,8 @@
     (command "_LAYER" "_M" "taz_s_execution_design" "_C" "30" "" "")
   )
 
-  ;; ---------------------------------
-  ;; WARSTWA ROBOCZA XREF
-  ;; taz_s_xref_editing_layer jest tworzona przez inny skrypt
-  ;; ---------------------------------
-
+  ;; Warstwy taz_s_xref_editing_layer / taz_s_xref_visible /
+  ;; taz_s_xref_hidden sa tworzone przez skrypt startowy.
   (setq taz_s_solprof_xref_mode nil)
 
   ;; ---------------------------------
@@ -1015,23 +1012,74 @@
   )
 
   ;; ---------------------------------
-  ;; SELEKCJA ORYGINALU - raz, przed wszystkimi petlami
+  ;; KLASY ELEMENTOW
   ;;
-  ;; Zbieramy enames oryginalu teraz gdy w rysunku sa tylko:
-  ;;   - oryginalny model
-  ;;   - osie (taz_s_axes)
-  ;; Wykluczone: osie, execution_design, editing_layer
+  ;; taz_s_beam / taz_s_plate = geometria z danymi
+  ;; taz_s_xref               = geometria referencyjna bez danych
+  ;; pozostale warstwy        = ignorowane przez generator
+  ;; ---------------------------------
+
+  (defun taz_s_is_data_layer (taz_s_layer_name_arg)
+    (if taz_s_layer_name_arg
+      (or
+        (= (strcase taz_s_layer_name_arg) "TAZ_S_BEAM")
+        (= (strcase taz_s_layer_name_arg) "TAZ_S_PLATE")
+      )
+      nil
+    )
+  )
+
+  (defun taz_s_is_xref_layer (taz_s_layer_name_arg)
+    (if taz_s_layer_name_arg
+      (= (strcase taz_s_layer_name_arg) "TAZ_S_XREF")
+      nil
+    )
+  )
+
+  ;; ---------------------------------
+  ;; ORYGINAL DO KONCOWEGO SPRZATANIA
+  ;;
+  ;; Zachowujemy dotychczasowe zachowanie pliku _DRAWINGS:
+  ;; wszystko z oryginalnego modelu (poza osiami i warstwami roboczymi)
+  ;; zostanie na koniec usuniete, nawet jezeli nie bierze udzialu
+  ;; w generowaniu widokow.
+  ;; ---------------------------------
+
+  (setq taz_s_orig_cleanup_ss
+    (ssget "X"
+      (list
+        (cons -4 "<AND")
+        (cons 67 0)
+        (cons -4 "<NOT") (cons 8 "taz_s_axes")               (cons -4 "NOT>")
+        (cons -4 "<NOT") (cons 8 "taz_s_execution_design")   (cons -4 "NOT>")
+        (cons -4 "<NOT") (cons 8 "taz_s_editing_layer")      (cons -4 "NOT>")
+        (cons -4 "<NOT") (cons 8 "taz_s_xref_editing_layer") (cons -4 "NOT>")
+        (cons -4 "AND>")
+      )
+    )
+  )
+
+  ;; ---------------------------------
+  ;; SELEKCJA ELEMENTOW DO GENEROWANIA
+  ;;
+  ;; Tylko 3DSOLID na:
+  ;;   taz_s_beam  - element z danymi
+  ;;   taz_s_plate - element z danymi (gotowe na przyszlosc)
+  ;;   taz_s_xref  - geometria referencyjna bez danych
+  ;; Reszta jest ignorowana.
   ;; ---------------------------------
 
   (setq taz_s_orig_ss
     (ssget "X"
       (list
         (cons -4 "<AND")
-        (cons 67 0)                                          ; tylko model space
-        (cons -4 "<NOT") (cons 8 "taz_s_axes")             (cons -4 "NOT>")
-        (cons -4 "<NOT") (cons 8 "taz_s_execution_design") (cons -4 "NOT>")
-        (cons -4 "<NOT") (cons 8 "taz_s_editing_layer")    (cons -4 "NOT>")
-        (cons -4 "<NOT") (cons 8 "taz_s_xref_editing_layer") (cons -4 "NOT>")
+        (cons 67 0)
+        (cons 0 "3DSOLID")
+        (cons -4 "<OR")
+        (cons 8 "taz_s_beam")
+        (cons 8 "taz_s_plate")
+        (cons 8 "taz_s_xref")
+        (cons -4 "OR>")
         (cons -4 "AND>")
       )
     )
@@ -1076,36 +1124,63 @@
   (defun taz_s_copy_attrs_to_copies (taz_s_last_before)
     (setq taz_s_new_ent (entnext taz_s_last_before))
     (setq taz_s_map_index 0)
-    (while taz_s_new_ent
-      (setq taz_s_orig_h
-        (cdr (assoc 5 (entget (nth taz_s_map_index taz_s_orig_enames))))
-      )
-      (setq taz_s_new_h (cdr (assoc 5 (entget taz_s_new_ent))))
 
-      (setq taz_s_orig_attr6_sym (read (strcat "taz_s_" taz_s_orig_h "_attr6")))
-      (if (boundp taz_s_orig_attr6_sym)
-        (set (read (strcat "taz_s_" taz_s_new_h "_attr6")) (eval taz_s_orig_attr6_sym))
+    (while
+      (and
+        taz_s_new_ent
+        (< taz_s_map_index (length taz_s_orig_enames))
       )
 
-      (setq taz_s_orig_attr7_sym (read (strcat "taz_s_" taz_s_orig_h "_attr7")))
-      (if (boundp taz_s_orig_attr7_sym)
-        (set (read (strcat "taz_s_" taz_s_new_h "_attr7")) (eval taz_s_orig_attr7_sym))
+      (setq taz_s_orig_ent_for_copy
+        (nth taz_s_map_index taz_s_orig_enames)
       )
-      
-      (setq taz_s_orig_sweep_p1_sym (read (strcat "taz_s_" taz_s_orig_h "_sweep_p1")))
-      (if (boundp taz_s_orig_sweep_p1_sym)
-        (set (read (strcat "taz_s_" taz_s_new_h "_sweep_p1")) (eval taz_s_orig_sweep_p1_sym))
+      (setq taz_s_orig_data_for_copy
+        (entget taz_s_orig_ent_for_copy)
+      )
+      (setq taz_s_orig_layer_for_copy
+        (cdr (assoc 8 taz_s_orig_data_for_copy))
       )
 
-      (setq taz_s_orig_sweep_p2_sym (read (strcat "taz_s_" taz_s_orig_h "_sweep_p2")))
-      (if (boundp taz_s_orig_sweep_p2_sym)
-        (set (read (strcat "taz_s_" taz_s_new_h "_sweep_p2")) (eval taz_s_orig_sweep_p2_sym))
+      ;; Tylko beam / plate maja dane elementu.
+      ;; XREF jest kopiowany geometrycznie, ale nie oczekujemy po nim
+      ;; zadnych attr6 / attr7 / sweep_p1 / sweep_p2.
+      (if (taz_s_is_data_layer taz_s_orig_layer_for_copy)
+        (progn
+
+          (setq taz_s_orig_h
+            (cdr (assoc 5 taz_s_orig_data_for_copy))
+          )
+          (setq taz_s_new_h
+            (cdr (assoc 5 (entget taz_s_new_ent)))
+          )
+
+          (setq taz_s_orig_attr6_sym (read (strcat "taz_s_" taz_s_orig_h "_attr6")))
+          (if (boundp taz_s_orig_attr6_sym)
+            (set (read (strcat "taz_s_" taz_s_new_h "_attr6")) (eval taz_s_orig_attr6_sym))
+          )
+
+          (setq taz_s_orig_attr7_sym (read (strcat "taz_s_" taz_s_orig_h "_attr7")))
+          (if (boundp taz_s_orig_attr7_sym)
+            (set (read (strcat "taz_s_" taz_s_new_h "_attr7")) (eval taz_s_orig_attr7_sym))
+          )
+
+          (setq taz_s_orig_sweep_p1_sym (read (strcat "taz_s_" taz_s_orig_h "_sweep_p1")))
+          (if (boundp taz_s_orig_sweep_p1_sym)
+            (set (read (strcat "taz_s_" taz_s_new_h "_sweep_p1")) (eval taz_s_orig_sweep_p1_sym))
+          )
+
+          (setq taz_s_orig_sweep_p2_sym (read (strcat "taz_s_" taz_s_orig_h "_sweep_p2")))
+          (if (boundp taz_s_orig_sweep_p2_sym)
+            (set (read (strcat "taz_s_" taz_s_new_h "_sweep_p2")) (eval taz_s_orig_sweep_p2_sym))
+          )
+        )
       )
 
       (setq taz_s_map_index (+ taz_s_map_index 1))
       (setq taz_s_new_ent (entnext taz_s_new_ent))
     )
   )
+
 
   ;; ---------------------------------
   ;; POMOCNICZA: sprawdz czy ename jest na liscie oryginalu
@@ -1200,8 +1275,8 @@
   ;;   taz_s_cut_ename  - ename bryly tnacej (wzorzec)
   ;;   taz_s_elems_list - lista ename elementow kopii do obrobki
   ;;
-  ;; Przed INTERSECT rozdziela wyniki na taz_s_execution_design
-  ;; albo taz_s_xref_editing_layer, zależnie od warstwy oryginalu.
+  ;; Przed kazdym intersectem ustawia warstwe na taz_s_editing_layer
+  ;; dzieki czemu wyniki intersect trafiaja na te warstwe.
   ;; Dla wszystkich elementow oprocz ostatniego: kopiuje bryle tnaca
   ;; w to samo miejsce i uzywa duplikatu. Ostatni element: uzywa
   ;; oryginalnej bryly tnacej bezposrednio (oszczednosc jednego COPY).
@@ -1222,7 +1297,16 @@
     (while (< taz_s_ei taz_s_total_elems)
       (setq taz_s_target_ent (nth taz_s_ei taz_s_elems_list))
       (setq taz_s_orig_ent (nth taz_s_ei taz_s_orig_enames))
-      (setq taz_s_orig_layer (cdr (assoc 8 (entget taz_s_orig_ent))))
+      (setq taz_s_orig_layer
+        (cdr (assoc 8 (entget taz_s_orig_ent)))
+      )
+
+      ;; Beam / plate maja dane, dlatego tylko dla nich sprawdzamy
+      ;; widocznosc przez -INTERFERE i tworzymy etykiety / tabele.
+      ;; XREF pomija caly ten blok i idzie od razu do INTERSECT.
+      (if (taz_s_is_data_layer taz_s_orig_layer)
+        (progn
+
       ;; --- SPRAWDZENIE CZY WYSTEPUJE PRZECIECIE (-INTERFERE) ---
       ;; Kopiujemy bryle tnaca na miejsce oryginalu (bez zoffset),
       ;; sprawdzamy przeciecie wzgledem ORYGINALU, potem kasujemy kopie.
@@ -1248,9 +1332,6 @@
           (if taz_s_layer0_ss
             (command "ERASE" taz_s_layer0_ss "")
           )
-          ;; taz_s_xref: geometria jest cieta normalnie, ale bez danych i etykiety
-          (if (/= (strcase taz_s_orig_layer) "TAZ_S_XREF")
-            (progn
           (setq taz_s_visible_handles
             (append taz_s_visible_handles
               (list (cdr (assoc 5 (entget taz_s_orig_ent))))
@@ -1375,13 +1456,15 @@
              (command "_.ROTATE3D" (entlast) "" "X" taz_s_annotation_ins_pt "90")
             )
           )
-            )
-          )
         )
       )
       ;; usun tymczasowa kopie bryly tnacej - nie jest juz potrzebna
       (entdel taz_s_cut_tmp_ent)
       ;; --- KONIEC SPRAWDZENIA ---
+
+        )
+      )
+
       ;; Zawsze kopiuj bryle tnaca - oryginał zostaje nienaruszony
       (setq taz_s_cut_ss1 (ssadd))
       (ssadd taz_s_cut_ename taz_s_cut_ss1)
@@ -1389,16 +1472,17 @@
       (setq taz_s_cut_work_ent (entlast))
       (setvar "CLAYER" "taz_s_editing_layer")
       (setq taz_s_int_ss (ssadd))
-      (ssadd taz_s_cut_work_ent taz_s_int_ss)
+      (ssadd taz_s_cut_work_ent taz_s_int_ss)      
       (ssadd taz_s_target_ent   taz_s_int_ss)
 
-      ;; xref ma osobna warstwe robocza, zeby SOLPROF mogl go obsluzyc osobno
-      (if (= (strcase taz_s_orig_layer) "TAZ_S_XREF")
+      ;; Beam / plate -> zwykla geometria wykonawcza.
+      ;; XREF -> osobna geometria robocza do osobnego SOLPROF.
+      (if (taz_s_is_xref_layer taz_s_orig_layer)
         (setq taz_s_intersect_layer "taz_s_xref_editing_layer")
         (setq taz_s_intersect_layer "taz_s_execution_design")
       )
-      (command "_.CHPROP" taz_s_int_ss "" "LA" taz_s_intersect_layer "")
 
+      (command "_.CHPROP" taz_s_int_ss "" "LA" taz_s_intersect_layer "")
       (command "INTERSECT" taz_s_int_ss "")
       (setq taz_s_ei (+ taz_s_ei 1))
     )
@@ -1427,10 +1511,12 @@
         (list
           (cons -4 "<AND")
           (cons 67 0)
-          (cons -4 "<NOT") (cons 8 "taz_s_axes")             (cons -4 "NOT>")
-          (cons -4 "<NOT") (cons 8 "taz_s_execution_design") (cons -4 "NOT>")
-          (cons -4 "<NOT") (cons 8 "taz_s_editing_layer")    (cons -4 "NOT>")
-          (cons -4 "<NOT") (cons 8 "taz_s_xref_editing_layer") (cons -4 "NOT>")
+          (cons 0 "3DSOLID")
+          (cons -4 "<OR")
+          (cons 8 "taz_s_beam")
+          (cons 8 "taz_s_plate")
+          (cons 8 "taz_s_xref")
+          (cons -4 "OR>")
           (cons -4 "AND>")
         )
       )
@@ -1672,7 +1758,7 @@
   ;;   1. Narysuj bryle tnaca w strefie Z tego przypadku
   ;;   2. Skopiuj oryginalny model do tej samej strefy Z
   ;;   3. Zbierz enames kopii (bez oryginalu, bez pomocniczych warstw)
-  ;;   4. Intersect parami (zwykle -> execution_design, xref -> xref_editing_layer)
+  ;;   4. Intersect parami (wyniki na taz_s_editing_layer)
   ;; =================================================================
 
   ;; ---------------------------------
@@ -1776,10 +1862,11 @@
     (setq taz_s_izo_orig_type (cdr (assoc 0 taz_s_izo_orig_data)))
     (setq taz_s_izo_orig_layer (cdr (assoc 8 taz_s_izo_orig_data)))
 
-    (if (and
-          (= taz_s_izo_orig_type "3DSOLID")
-          (/= (strcase taz_s_izo_orig_layer) "TAZ_S_XREF")
-        )
+    (if
+      (and
+        (= taz_s_izo_orig_type "3DSOLID")
+        (taz_s_is_data_layer taz_s_izo_orig_layer)
+      )
       (progn
         (setq taz_s_izo_orig_h (cdr (assoc 5 taz_s_izo_orig_data)))
 
@@ -1995,7 +2082,8 @@
     (command "COPY" taz_s_orig_ss "" "0,0,0" (list 0 0 taz_s_izo_zoffset))
   )
 
-  ;; Zbierz tylko skopiowane bryly 3DSOLID
+  ;; Zbierz tylko skopiowane bryly 3DSOLID i rozdziel je
+  ;; na elementy z danymi oraz geometrie referencyjna XREF.
   (setq taz_s_izo_enames (taz_s_collect_copy_enames))
   (setq taz_s_izo_ss (ssadd))
   (setq taz_s_izo_normal_ss (ssadd))
@@ -2003,22 +2091,31 @@
   (setq taz_s_izo_tmp taz_s_izo_enames)
 
   (while taz_s_izo_tmp
+
     (setq taz_s_izo_copy_ent (car taz_s_izo_tmp))
-    (setq taz_s_izo_copy_layer (cdr (assoc 8 (entget taz_s_izo_copy_ent))))
+    (setq taz_s_izo_copy_layer
+      (cdr (assoc 8 (entget taz_s_izo_copy_ent)))
+    )
+
     (ssadd taz_s_izo_copy_ent taz_s_izo_ss)
 
-    (if (= (strcase taz_s_izo_copy_layer) "TAZ_S_XREF")
-      (ssadd taz_s_izo_copy_ent taz_s_izo_xref_ss)
+    (if (taz_s_is_data_layer taz_s_izo_copy_layer)
       (ssadd taz_s_izo_copy_ent taz_s_izo_normal_ss)
+    )
+
+    (if (taz_s_is_xref_layer taz_s_izo_copy_layer)
+      (ssadd taz_s_izo_copy_ent taz_s_izo_xref_ss)
     )
 
     (setq taz_s_izo_tmp (cdr taz_s_izo_tmp))
   )
 
-  ;; Zwykle bryly i xref ida do SOLPROF osobno.
+  ;; Beam / plate ida do zwyklego SOLPROF.
   (if (> (sslength taz_s_izo_normal_ss) 0)
     (command "_.CHPROP" taz_s_izo_normal_ss "" "LA" "taz_s_execution_design" "")
   )
+
+  ;; XREF idzie do osobnego SOLPROF.
   (if (> (sslength taz_s_izo_xref_ss) 0)
     (command "_.CHPROP" taz_s_izo_xref_ss "" "LA" "taz_s_xref_editing_layer" "")
   )
@@ -2245,10 +2342,11 @@
     (setq taz_s_izo_orig_type (cdr (assoc 0 taz_s_izo_orig_data)))
     (setq taz_s_izo_orig_layer (cdr (assoc 8 taz_s_izo_orig_data)))
 
-    (if (and
-          (= taz_s_izo_orig_type "3DSOLID")
-          (/= (strcase taz_s_izo_orig_layer) "TAZ_S_XREF")
-        )
+    (if
+      (and
+        (= taz_s_izo_orig_type "3DSOLID")
+        (taz_s_is_data_layer taz_s_izo_orig_layer)
+      )
       (progn
 
         (setq taz_s_izo_orig_h (cdr (assoc 5 taz_s_izo_orig_data)))
@@ -2340,26 +2438,26 @@
     )
   )
 
-  ;; Najpierw zwykle elementy -> hidden / visible
+  ;; Najpierw beam / plate -> zwykle warstwy visible / hidden.
   (if (> (sslength taz_s_izo_normal_ss) 0)
     (progn
+      (setq taz_s_solprof_xref_mode nil)
       (command "_.SOLPROF")
       (command taz_s_izo_normal_ss)
       (command "" "_Y" "_Y" "_Y")
       (command "_.ERASE" taz_s_izo_normal_ss "")
-      (setq taz_s_solprof_xref_mode nil)
       (taz_s_merge_solprof_layers)
     )
   )
 
-  ;; Potem podklad -> PH* na taz_s_xref_hidden, PV* na taz_s_xref_visible
+  ;; Potem XREF -> osobne warstwy xref_visible / xref_hidden.
   (if (> (sslength taz_s_izo_xref_ss) 0)
     (progn
+      (setq taz_s_solprof_xref_mode T)
       (command "_.SOLPROF")
       (command taz_s_izo_xref_ss)
       (command "" "_Y" "_Y" "_Y")
       (command "_.ERASE" taz_s_izo_xref_ss "")
-      (setq taz_s_solprof_xref_mode T)
       (taz_s_merge_solprof_layers)
       (setq taz_s_solprof_xref_mode nil)
     )
@@ -2532,32 +2630,39 @@
     (command "_PLAN" "_C")
     ;;(command "_REGEN")
     
-    ;; Zwykle elementy -> hidden / visible
-    (setq taz_s_solprof_ss (ssget "_X" (list (cons 8 "taz_s_execution_design"))))
+    ;; Beam / plate -> zwykly SOLPROF.
+    (setq taz_s_solprof_ss
+      (ssget "_X" (list (cons 8 "taz_s_execution_design")))
+    )
+
     (if taz_s_solprof_ss
       (progn
+        (setq taz_s_solprof_xref_mode nil)
         (command "_.SOLPROF")
         (command taz_s_solprof_ss)
         (command "" "_Y" "_Y" "_Y")
         (command "_.ERASE" taz_s_solprof_ss "")
-        (setq taz_s_solprof_xref_mode nil)
         (taz_s_merge_solprof_layers)
       )
     )
 
-    ;; Podklad -> PH* na taz_s_xref_hidden, PV* na taz_s_xref_visible
-    (setq taz_s_solprof_xref_ss (ssget "_X" (list (cons 8 "taz_s_xref_editing_layer"))))
+    ;; XREF -> osobny SOLPROF.
+    (setq taz_s_solprof_xref_ss
+      (ssget "_X" (list (cons 8 "taz_s_xref_editing_layer")))
+    )
+
     (if taz_s_solprof_xref_ss
       (progn
+        (setq taz_s_solprof_xref_mode T)
         (command "_.SOLPROF")
         (command taz_s_solprof_xref_ss)
         (command "" "_Y" "_Y" "_Y")
         (command "_.ERASE" taz_s_solprof_xref_ss "")
-        (setq taz_s_solprof_xref_mode T)
         (taz_s_merge_solprof_layers)
         (setq taz_s_solprof_xref_mode nil)
       )
     )
+
     (command "_pspace")
     (command "_layout" "_S" "Model")
     
@@ -2720,32 +2825,39 @@
     (command "_PLAN" "_C")
     ;;(command "_REGEN")
     
-    ;; Zwykle elementy -> hidden / visible
-    (setq taz_s_solprof_ss (ssget "_X" (list (cons 8 "taz_s_execution_design"))))
+    ;; Beam / plate -> zwykly SOLPROF.
+    (setq taz_s_solprof_ss
+      (ssget "_X" (list (cons 8 "taz_s_execution_design")))
+    )
+
     (if taz_s_solprof_ss
       (progn
+        (setq taz_s_solprof_xref_mode nil)
         (command "_.SOLPROF")
         (command taz_s_solprof_ss)
         (command "" "_Y" "_Y" "_Y")
         (command "_.ERASE" taz_s_solprof_ss "")
-        (setq taz_s_solprof_xref_mode nil)
         (taz_s_merge_solprof_layers)
       )
     )
 
-    ;; Podklad -> PH* na taz_s_xref_hidden, PV* na taz_s_xref_visible
-    (setq taz_s_solprof_xref_ss (ssget "_X" (list (cons 8 "taz_s_xref_editing_layer"))))
+    ;; XREF -> osobny SOLPROF.
+    (setq taz_s_solprof_xref_ss
+      (ssget "_X" (list (cons 8 "taz_s_xref_editing_layer")))
+    )
+
     (if taz_s_solprof_xref_ss
       (progn
+        (setq taz_s_solprof_xref_mode T)
         (command "_.SOLPROF")
         (command taz_s_solprof_xref_ss)
         (command "" "_Y" "_Y" "_Y")
         (command "_.ERASE" taz_s_solprof_xref_ss "")
-        (setq taz_s_solprof_xref_mode T)
         (taz_s_merge_solprof_layers)
         (setq taz_s_solprof_xref_mode nil)
       )
     )
+
     (command "_pspace")
     (command "_layout" "_S" "Model")
     
@@ -2959,39 +3071,45 @@
     (command "_PLAN" "_C")
     ;;(command "_REGEN")
     
-    ;; Zwykle elementy -> hidden / visible
-    (setq taz_s_solprof_ss (ssget "_X" (list (cons 8 "taz_s_execution_design"))))
+    ;; Beam / plate -> zwykly SOLPROF.
+    (setq taz_s_solprof_ss
+      (ssget "_X" (list (cons 8 "taz_s_execution_design")))
+    )
+
     (if taz_s_solprof_ss
       (progn
+        (setq taz_s_solprof_xref_mode nil)
         (command "_.SOLPROF")
         (command taz_s_solprof_ss)
         (command "" "_Y" "_Y" "_Y")
         (command "_.ERASE" taz_s_solprof_ss "")
-        (setq taz_s_solprof_xref_mode nil)
         (taz_s_merge_solprof_layers)
       )
     )
 
-    ;; Podklad -> PH* na taz_s_xref_hidden, PV* na taz_s_xref_visible
-    (setq taz_s_solprof_xref_ss (ssget "_X" (list (cons 8 "taz_s_xref_editing_layer"))))
+    ;; XREF -> osobny SOLPROF.
+    (setq taz_s_solprof_xref_ss
+      (ssget "_X" (list (cons 8 "taz_s_xref_editing_layer")))
+    )
+
     (if taz_s_solprof_xref_ss
       (progn
+        (setq taz_s_solprof_xref_mode T)
         (command "_.SOLPROF")
         (command taz_s_solprof_xref_ss)
         (command "" "_Y" "_Y" "_Y")
         (command "_.ERASE" taz_s_solprof_xref_ss "")
-        (setq taz_s_solprof_xref_mode T)
         (taz_s_merge_solprof_layers)
         (setq taz_s_solprof_xref_mode nil)
       )
     )
+
     (command "_pspace")
     (command "_layout" "_S" "Model")
     
   )
 
   (command "-LAYDEL" "N" "taz_s_execution_design" "" "_Y")
-  (setq taz_s_solprof_xref_mode nil)
   (taz_s_merge_solprof_layers)
 
   ;; ---------------------------------
@@ -3000,8 +3118,8 @@
 
   (command "_layout" "_S" "Model")
 
-  (if taz_s_orig_ss
-    (command "_.ERASE" taz_s_orig_ss "")
+  (if taz_s_orig_cleanup_ss
+    (command "_.ERASE" taz_s_orig_cleanup_ss "")
   )
 
   (if taz_s_orig_axes_ss
