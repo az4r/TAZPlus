@@ -6,6 +6,7 @@
   (load "C:\\TAZ\\STL\\taz_s_create_beam.lsp")
   (load "C:\\TAZ\\STL\\taz_s_create_drawings_execution_design.dcl")
   (load "C:\\TAZ\\STL\\taz_s_create_drawings_execution_design.lsp")
+  (load "C:\\TAZ\\STL\\taz_s_create_drawings_execution_design_organize.lsp")
   (load "C:\\TAZ\\STL\\taz_s_delete_beam.lsp")
   (load "C:\\TAZ\\STL\\taz_s_edit_attributes.dcl")
   (load "C:\\TAZ\\STL\\taz_s_edit_attributes.lsp")
