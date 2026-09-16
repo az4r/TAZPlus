@@ -9,20 +9,20 @@
 ##############################
 
 1. Katalog "TAZ" pownien znajdować się bezpośrednio w lokalizacji "C:\".
-2. W celu kontynuowania instalacji należy wpisać w linii komend AutoCAD następującą komendę:
+2. W celu kontynuowania instalacji należy wpisać w linii komend GstarCAD następującą komendę:
 (load "C:\\TAZ\\_INSTALL.lsp")
 
 ##############################
 ####     UŻYTKOWANIE:     ####
 ##############################
 
-1. Aby uruchomić nakładkę należy nacisnąć zielony przycisk gotowości znajdujący się w lewej części paska narzędzi i zezwolić na wczytanie wszystkich niezbędnych skryptów.
+1. Aby uruchomić nakładkę należy nacisnąć przycisk z symbolem błyskawicy znajdujący się w lewej części paska narzędzi i zezwolić na wczytanie wszystkich niezbędnych skryptów.
 
 ##############################
 ####    DEZINSTALACJA:    ####
 ##############################
 
-1. W celu odinstalowania nakładki należy wpisać w linii komend AutoCAD następującą komendę:
+1. W celu odinstalowania nakładki należy wpisać w linii komend GstarCAD następującą komendę:
 (load "C:\\TAZ\\_UNINSTALL.lsp")
 
 
@@ -43,18 +43,18 @@
 ###########################
 
 1. Directory "TAZ" should be placed directly in "C:\" location.
-2. Type in your command line (in AutoCAD):
+2. Type in your command line (in GstarCAD):
 (load "C:\\TAZ\\_INSTALL.lsp")
 
 ###########################
 ####    HOW TO USE:    ####
 ###########################
 
-1. Simply push the green standby button located on the left side of the toolbar and allow to load all necessary scripts.
+1. Simply push the button with the lightning bolt icon located on the left side of the toolbar and allow to load all necessary scripts.
 
 ###########################
 #### HOW TO UNINSTALL: ####
 ###########################
 
-1. Type in your command line (in AutoCAD):
+1. Type in your command line (in GstarCAD):
 (load "C:\\TAZ\\_UNINSTALL.lsp")
