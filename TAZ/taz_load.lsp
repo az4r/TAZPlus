@@ -39,6 +39,7 @@
   (load "C:\\TAZ\\STL\\taz_s_select_section.dcl")
   (load "C:\\TAZ\\STL\\taz_s_select_section.lsp")
   (load "C:\\TAZ\\STL\\taz_s_explode.lsp")
+  (load "C:\\TAZ\\STL\\taz_s_explode_all.lsp")
   (load "C:\\TAZ\\STL\\taz_s_start.lsp")
   (princ)
 )
