@@ -3005,13 +3005,18 @@
   ;; Najpierw podklad -> osobne warstwy xref_visible / xref_hidden.
   ;; Uwaga: bez ERASE tutaj - obiekty podkladu sa jeszcze potrzebne
   ;; w kolejnym, wspolnym przebiegu SOLPROF ponizej.
+  (setq taz_s_vide_xref_new_ents nil)
   (if (> (sslength taz_s_izo_xref_ss) 0)
     (progn
       (setq taz_s_solprof_xref_mode T)
+      (setq taz_s_vide_xref_before (taz_s_execution_design_get_last_entity))
       (command "_.SOLPROF")
       (command taz_s_izo_xref_ss)
       (command "" "_Y" "_Y" "_Y")
       (taz_s_merge_solprof_layers)
+      (setq taz_s_vide_xref_new_ents
+        (taz_s_execution_design_collect_new_entities taz_s_vide_xref_before)
+      )
       (setq taz_s_solprof_xref_mode nil)
     )
   )
@@ -3020,11 +3025,16 @@
   (if (> (sslength taz_s_izo_ss) 0)
     (progn
       (setq taz_s_solprof_xref_mode nil)
+      (setq taz_s_vide_combined_before (taz_s_execution_design_get_last_entity))
       (command "_.SOLPROF")
       (command taz_s_izo_ss)
       (command "" "_Y" "_Y" "_Y")
       (command "_.ERASE" taz_s_izo_ss "")
       (taz_s_merge_solprof_layers)
+      (taz_s_solprof_mark_xref_duplicates
+        (taz_s_execution_design_collect_new_entities taz_s_vide_combined_before)
+        taz_s_vide_xref_new_ents
+      )
     )
   )
 
@@ -3198,6 +3208,7 @@
     ;; Podklad -> osobny SOLPROF.
     ;; Uwaga: bez ERASE tutaj - obiekty podkladu sa jeszcze potrzebne
     ;; w kolejnym, wspolnym przebiegu SOLPROF ponizej.
+    (setq taz_s_vide_xref_new_ents nil)
     (setq taz_s_solprof_xref_ss
       (ssget "_X" (list (cons 8 "taz_s_xref_editing_layer")))
     )
@@ -3205,10 +3216,14 @@
     (if taz_s_solprof_xref_ss
       (progn
         (setq taz_s_solprof_xref_mode T)
+        (setq taz_s_vide_xref_before (taz_s_execution_design_get_last_entity))
         (command "_.SOLPROF")
         (command taz_s_solprof_xref_ss)
         (command "" "_Y" "_Y" "_Y")
         (taz_s_merge_solprof_layers)
+        (setq taz_s_vide_xref_new_ents
+          (taz_s_execution_design_collect_new_entities taz_s_vide_xref_before)
+        )
         (setq taz_s_solprof_xref_mode nil)
       )
     )
@@ -3228,11 +3243,16 @@
     (if taz_s_solprof_ss
       (progn
         (setq taz_s_solprof_xref_mode nil)
+        (setq taz_s_vide_combined_before (taz_s_execution_design_get_last_entity))
         (command "_.SOLPROF")
         (command taz_s_solprof_ss)
         (command "" "_Y" "_Y" "_Y")
         (command "_.ERASE" taz_s_solprof_ss "")
         (taz_s_merge_solprof_layers)
+        (taz_s_solprof_mark_xref_duplicates
+          (taz_s_execution_design_collect_new_entities taz_s_vide_combined_before)
+          taz_s_vide_xref_new_ents
+        )
       )
     )
 
@@ -3401,6 +3421,7 @@
     ;; Podklad -> osobny SOLPROF.
     ;; Uwaga: bez ERASE tutaj - obiekty podkladu sa jeszcze potrzebne
     ;; w kolejnym, wspolnym przebiegu SOLPROF ponizej.
+    (setq taz_s_vide_xref_new_ents nil)
     (setq taz_s_solprof_xref_ss
       (ssget "_X" (list (cons 8 "taz_s_xref_editing_layer")))
     )
@@ -3408,10 +3429,14 @@
     (if taz_s_solprof_xref_ss
       (progn
         (setq taz_s_solprof_xref_mode T)
+        (setq taz_s_vide_xref_before (taz_s_execution_design_get_last_entity))
         (command "_.SOLPROF")
         (command taz_s_solprof_xref_ss)
         (command "" "_Y" "_Y" "_Y")
         (taz_s_merge_solprof_layers)
+        (setq taz_s_vide_xref_new_ents
+          (taz_s_execution_design_collect_new_entities taz_s_vide_xref_before)
+        )
         (setq taz_s_solprof_xref_mode nil)
       )
     )
@@ -3431,11 +3456,16 @@
     (if taz_s_solprof_ss
       (progn
         (setq taz_s_solprof_xref_mode nil)
+        (setq taz_s_vide_combined_before (taz_s_execution_design_get_last_entity))
         (command "_.SOLPROF")
         (command taz_s_solprof_ss)
         (command "" "_Y" "_Y" "_Y")
         (command "_.ERASE" taz_s_solprof_ss "")
         (taz_s_merge_solprof_layers)
+        (taz_s_solprof_mark_xref_duplicates
+          (taz_s_execution_design_collect_new_entities taz_s_vide_combined_before)
+          taz_s_vide_xref_new_ents
+        )
       )
     )
 
@@ -3655,6 +3685,7 @@
     ;; Podklad -> osobny SOLPROF.
     ;; Uwaga: bez ERASE tutaj - obiekty podkladu sa jeszcze potrzebne
     ;; w kolejnym, wspolnym przebiegu SOLPROF ponizej.
+    (setq taz_s_vide_xref_new_ents nil)
     (setq taz_s_solprof_xref_ss
       (ssget "_X" (list (cons 8 "taz_s_xref_editing_layer")))
     )
@@ -3662,10 +3693,14 @@
     (if taz_s_solprof_xref_ss
       (progn
         (setq taz_s_solprof_xref_mode T)
+        (setq taz_s_vide_xref_before (taz_s_execution_design_get_last_entity))
         (command "_.SOLPROF")
         (command taz_s_solprof_xref_ss)
         (command "" "_Y" "_Y" "_Y")
         (taz_s_merge_solprof_layers)
+        (setq taz_s_vide_xref_new_ents
+          (taz_s_execution_design_collect_new_entities taz_s_vide_xref_before)
+        )
         (setq taz_s_solprof_xref_mode nil)
       )
     )
@@ -3685,11 +3720,16 @@
     (if taz_s_solprof_ss
       (progn
         (setq taz_s_solprof_xref_mode nil)
+        (setq taz_s_vide_combined_before (taz_s_execution_design_get_last_entity))
         (command "_.SOLPROF")
         (command taz_s_solprof_ss)
         (command "" "_Y" "_Y" "_Y")
         (command "_.ERASE" taz_s_solprof_ss "")
         (taz_s_merge_solprof_layers)
+        (taz_s_solprof_mark_xref_duplicates
+          (taz_s_execution_design_collect_new_entities taz_s_vide_combined_before)
+          taz_s_vide_xref_new_ents
+        )
       )
     )
 
