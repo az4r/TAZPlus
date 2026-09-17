@@ -3002,28 +3002,29 @@
     )
   )
 
-  ;; Najpierw beam / plate -> zwykle warstwy visible / hidden.
-  (if (> (sslength taz_s_izo_normal_ss) 0)
-    (progn
-      (setq taz_s_solprof_xref_mode nil)
-      (command "_.SOLPROF")
-      (command taz_s_izo_normal_ss)
-      (command "" "_Y" "_Y" "_Y")
-      (command "_.ERASE" taz_s_izo_normal_ss "")
-      (taz_s_merge_solprof_layers)
-    )
-  )
-
-  ;; Potem podklad -> osobne warstwy xref_visible / xref_hidden.
+  ;; Najpierw podklad -> osobne warstwy xref_visible / xref_hidden.
+  ;; Uwaga: bez ERASE tutaj - obiekty podkladu sa jeszcze potrzebne
+  ;; w kolejnym, wspolnym przebiegu SOLPROF ponizej.
   (if (> (sslength taz_s_izo_xref_ss) 0)
     (progn
       (setq taz_s_solprof_xref_mode T)
       (command "_.SOLPROF")
       (command taz_s_izo_xref_ss)
       (command "" "_Y" "_Y" "_Y")
-      (command "_.ERASE" taz_s_izo_xref_ss "")
       (taz_s_merge_solprof_layers)
       (setq taz_s_solprof_xref_mode nil)
+    )
+  )
+
+  ;; Potem podklad + beam / plate razem -> zwykle warstwy visible / hidden.
+  (if (> (sslength taz_s_izo_ss) 0)
+    (progn
+      (setq taz_s_solprof_xref_mode nil)
+      (command "_.SOLPROF")
+      (command taz_s_izo_ss)
+      (command "" "_Y" "_Y" "_Y")
+      (command "_.ERASE" taz_s_izo_ss "")
+      (taz_s_merge_solprof_layers)
     )
   )
 
@@ -3194,23 +3195,9 @@
     (command "_PLAN" "_C")
     ;;(command "_REGEN")
     
-    ;; Beam / plate -> zwykly SOLPROF.
-    (setq taz_s_solprof_ss
-      (ssget "_X" (list (cons 8 "taz_s_execution_design")))
-    )
-
-    (if taz_s_solprof_ss
-      (progn
-        (setq taz_s_solprof_xref_mode nil)
-        (command "_.SOLPROF")
-        (command taz_s_solprof_ss)
-        (command "" "_Y" "_Y" "_Y")
-        (command "_.ERASE" taz_s_solprof_ss "")
-        (taz_s_merge_solprof_layers)
-      )
-    )
-
     ;; Podklad -> osobny SOLPROF.
+    ;; Uwaga: bez ERASE tutaj - obiekty podkladu sa jeszcze potrzebne
+    ;; w kolejnym, wspolnym przebiegu SOLPROF ponizej.
     (setq taz_s_solprof_xref_ss
       (ssget "_X" (list (cons 8 "taz_s_xref_editing_layer")))
     )
@@ -3221,9 +3208,31 @@
         (command "_.SOLPROF")
         (command taz_s_solprof_xref_ss)
         (command "" "_Y" "_Y" "_Y")
-        (command "_.ERASE" taz_s_solprof_xref_ss "")
         (taz_s_merge_solprof_layers)
         (setq taz_s_solprof_xref_mode nil)
+      )
+    )
+
+    ;; Podklad + beam / plate razem -> wspolny SOLPROF.
+    (setq taz_s_solprof_ss
+      (ssget "_X"
+        (list
+          (cons -4 "<OR")
+          (cons 8 "taz_s_execution_design")
+          (cons 8 "taz_s_xref_editing_layer")
+          (cons -4 "OR>")
+        )
+      )
+    )
+
+    (if taz_s_solprof_ss
+      (progn
+        (setq taz_s_solprof_xref_mode nil)
+        (command "_.SOLPROF")
+        (command taz_s_solprof_ss)
+        (command "" "_Y" "_Y" "_Y")
+        (command "_.ERASE" taz_s_solprof_ss "")
+        (taz_s_merge_solprof_layers)
       )
     )
 
@@ -3389,23 +3398,9 @@
     (command "_PLAN" "_C")
     ;;(command "_REGEN")
     
-    ;; Beam / plate -> zwykly SOLPROF.
-    (setq taz_s_solprof_ss
-      (ssget "_X" (list (cons 8 "taz_s_execution_design")))
-    )
-
-    (if taz_s_solprof_ss
-      (progn
-        (setq taz_s_solprof_xref_mode nil)
-        (command "_.SOLPROF")
-        (command taz_s_solprof_ss)
-        (command "" "_Y" "_Y" "_Y")
-        (command "_.ERASE" taz_s_solprof_ss "")
-        (taz_s_merge_solprof_layers)
-      )
-    )
-
     ;; Podklad -> osobny SOLPROF.
+    ;; Uwaga: bez ERASE tutaj - obiekty podkladu sa jeszcze potrzebne
+    ;; w kolejnym, wspolnym przebiegu SOLPROF ponizej.
     (setq taz_s_solprof_xref_ss
       (ssget "_X" (list (cons 8 "taz_s_xref_editing_layer")))
     )
@@ -3416,9 +3411,31 @@
         (command "_.SOLPROF")
         (command taz_s_solprof_xref_ss)
         (command "" "_Y" "_Y" "_Y")
-        (command "_.ERASE" taz_s_solprof_xref_ss "")
         (taz_s_merge_solprof_layers)
         (setq taz_s_solprof_xref_mode nil)
+      )
+    )
+
+    ;; Podklad + beam / plate razem -> wspolny SOLPROF.
+    (setq taz_s_solprof_ss
+      (ssget "_X"
+        (list
+          (cons -4 "<OR")
+          (cons 8 "taz_s_execution_design")
+          (cons 8 "taz_s_xref_editing_layer")
+          (cons -4 "OR>")
+        )
+      )
+    )
+
+    (if taz_s_solprof_ss
+      (progn
+        (setq taz_s_solprof_xref_mode nil)
+        (command "_.SOLPROF")
+        (command taz_s_solprof_ss)
+        (command "" "_Y" "_Y" "_Y")
+        (command "_.ERASE" taz_s_solprof_ss "")
+        (taz_s_merge_solprof_layers)
       )
     )
 
@@ -3635,23 +3652,9 @@
     (command "_PLAN" "_C")
     ;;(command "_REGEN")
     
-    ;; Beam / plate -> zwykly SOLPROF.
-    (setq taz_s_solprof_ss
-      (ssget "_X" (list (cons 8 "taz_s_execution_design")))
-    )
-
-    (if taz_s_solprof_ss
-      (progn
-        (setq taz_s_solprof_xref_mode nil)
-        (command "_.SOLPROF")
-        (command taz_s_solprof_ss)
-        (command "" "_Y" "_Y" "_Y")
-        (command "_.ERASE" taz_s_solprof_ss "")
-        (taz_s_merge_solprof_layers)
-      )
-    )
-
     ;; Podklad -> osobny SOLPROF.
+    ;; Uwaga: bez ERASE tutaj - obiekty podkladu sa jeszcze potrzebne
+    ;; w kolejnym, wspolnym przebiegu SOLPROF ponizej.
     (setq taz_s_solprof_xref_ss
       (ssget "_X" (list (cons 8 "taz_s_xref_editing_layer")))
     )
@@ -3662,9 +3665,31 @@
         (command "_.SOLPROF")
         (command taz_s_solprof_xref_ss)
         (command "" "_Y" "_Y" "_Y")
-        (command "_.ERASE" taz_s_solprof_xref_ss "")
         (taz_s_merge_solprof_layers)
         (setq taz_s_solprof_xref_mode nil)
+      )
+    )
+
+    ;; Podklad + beam / plate razem -> wspolny SOLPROF.
+    (setq taz_s_solprof_ss
+      (ssget "_X"
+        (list
+          (cons -4 "<OR")
+          (cons 8 "taz_s_execution_design")
+          (cons 8 "taz_s_xref_editing_layer")
+          (cons -4 "OR>")
+        )
+      )
+    )
+
+    (if taz_s_solprof_ss
+      (progn
+        (setq taz_s_solprof_xref_mode nil)
+        (command "_.SOLPROF")
+        (command taz_s_solprof_ss)
+        (command "" "_Y" "_Y" "_Y")
+        (command "_.ERASE" taz_s_solprof_ss "")
+        (taz_s_merge_solprof_layers)
       )
     )
 
