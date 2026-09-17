@@ -38,6 +38,7 @@
   (load "C:\\TAZ\\STL\\taz_s_section_lbeam_draw_parametres_katownik_rownoramienny.lsp")
   (load "C:\\TAZ\\STL\\taz_s_select_section.dcl")
   (load "C:\\TAZ\\STL\\taz_s_select_section.lsp")
+  (load "C:\\TAZ\\STL\\taz_s_explode.lsp")
   (load "C:\\TAZ\\STL\\taz_s_start.lsp")
   (princ)
 )
