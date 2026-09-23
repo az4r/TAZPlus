@@ -3005,38 +3005,40 @@
   ;; Najpierw podklad -> osobne warstwy xref_visible / xref_hidden.
   ;; Uwaga: bez ERASE tutaj - obiekty podkladu sa jeszcze potrzebne
   ;; w kolejnym, wspolnym przebiegu SOLPROF ponizej.
-  (setq taz_s_vide_xref_new_ents nil)
+  (setq taz_s_vide_before_xref_entity (taz_s_execution_design_get_last_entity))
   (if (> (sslength taz_s_izo_xref_ss) 0)
     (progn
       (setq taz_s_solprof_xref_mode T)
-      (setq taz_s_vide_xref_before (taz_s_execution_design_get_last_entity))
       (command "_.SOLPROF")
       (command taz_s_izo_xref_ss)
       (command "" "_Y" "_Y" "_Y")
       (taz_s_merge_solprof_layers)
-      (setq taz_s_vide_xref_new_ents
-        (taz_s_execution_design_collect_new_entities taz_s_vide_xref_before)
-      )
       (setq taz_s_solprof_xref_mode nil)
     )
   )
+  (setq taz_s_vide_xref_entities
+    (taz_s_execution_design_collect_new_entities taz_s_vide_before_xref_entity)
+  )
 
   ;; Potem podklad + beam / plate razem -> zwykle warstwy visible / hidden.
+  (setq taz_s_vide_before_combined_entity (taz_s_execution_design_get_last_entity))
   (if (> (sslength taz_s_izo_ss) 0)
     (progn
       (setq taz_s_solprof_xref_mode nil)
-      (setq taz_s_vide_combined_before (taz_s_execution_design_get_last_entity))
       (command "_.SOLPROF")
       (command taz_s_izo_ss)
       (command "" "_Y" "_Y" "_Y")
       (command "_.ERASE" taz_s_izo_ss "")
       (taz_s_merge_solprof_layers)
-      (taz_s_solprof_mark_xref_duplicates
-        (taz_s_execution_design_collect_new_entities taz_s_vide_combined_before)
-        taz_s_vide_xref_new_ents
-      )
     )
   )
+  (setq taz_s_vide_combined_entities
+    (taz_s_execution_design_collect_new_entities taz_s_vide_before_combined_entity)
+  )
+
+  ;; Reklasyfikacja: krawedzie wspolnego przebiegu, ktore powielaja
+  ;; krawedzie samego podkladu, wracaja na warstwy xref_visible / xref_hidden.
+  (taz_s_vide_reclassify_edges taz_s_vide_combined_entities taz_s_vide_xref_entities)
 
   (command "_pspace")
   (command "_layout" "_S" "Model")
@@ -3208,24 +3210,23 @@
     ;; Podklad -> osobny SOLPROF.
     ;; Uwaga: bez ERASE tutaj - obiekty podkladu sa jeszcze potrzebne
     ;; w kolejnym, wspolnym przebiegu SOLPROF ponizej.
-    (setq taz_s_vide_xref_new_ents nil)
     (setq taz_s_solprof_xref_ss
       (ssget "_X" (list (cons 8 "taz_s_xref_editing_layer")))
     )
 
+    (setq taz_s_vide_before_xref_entity (taz_s_execution_design_get_last_entity))
     (if taz_s_solprof_xref_ss
       (progn
         (setq taz_s_solprof_xref_mode T)
-        (setq taz_s_vide_xref_before (taz_s_execution_design_get_last_entity))
         (command "_.SOLPROF")
         (command taz_s_solprof_xref_ss)
         (command "" "_Y" "_Y" "_Y")
         (taz_s_merge_solprof_layers)
-        (setq taz_s_vide_xref_new_ents
-          (taz_s_execution_design_collect_new_entities taz_s_vide_xref_before)
-        )
         (setq taz_s_solprof_xref_mode nil)
       )
+    )
+    (setq taz_s_vide_xref_entities
+      (taz_s_execution_design_collect_new_entities taz_s_vide_before_xref_entity)
     )
 
     ;; Podklad + beam / plate razem -> wspolny SOLPROF.
@@ -3240,21 +3241,24 @@
       )
     )
 
+    (setq taz_s_vide_before_combined_entity (taz_s_execution_design_get_last_entity))
     (if taz_s_solprof_ss
       (progn
         (setq taz_s_solprof_xref_mode nil)
-        (setq taz_s_vide_combined_before (taz_s_execution_design_get_last_entity))
         (command "_.SOLPROF")
         (command taz_s_solprof_ss)
         (command "" "_Y" "_Y" "_Y")
         (command "_.ERASE" taz_s_solprof_ss "")
         (taz_s_merge_solprof_layers)
-        (taz_s_solprof_mark_xref_duplicates
-          (taz_s_execution_design_collect_new_entities taz_s_vide_combined_before)
-          taz_s_vide_xref_new_ents
-        )
       )
     )
+    (setq taz_s_vide_combined_entities
+      (taz_s_execution_design_collect_new_entities taz_s_vide_before_combined_entity)
+    )
+
+    ;; Reklasyfikacja: krawedzie wspolnego przebiegu, ktore powielaja
+    ;; krawedzie samego podkladu, wracaja na warstwy xref_visible / xref_hidden.
+    (taz_s_vide_reclassify_edges taz_s_vide_combined_entities taz_s_vide_xref_entities)
 
     (command "_pspace")
     (command "_layout" "_S" "Model")
@@ -3421,24 +3425,23 @@
     ;; Podklad -> osobny SOLPROF.
     ;; Uwaga: bez ERASE tutaj - obiekty podkladu sa jeszcze potrzebne
     ;; w kolejnym, wspolnym przebiegu SOLPROF ponizej.
-    (setq taz_s_vide_xref_new_ents nil)
     (setq taz_s_solprof_xref_ss
       (ssget "_X" (list (cons 8 "taz_s_xref_editing_layer")))
     )
 
+    (setq taz_s_vide_before_xref_entity (taz_s_execution_design_get_last_entity))
     (if taz_s_solprof_xref_ss
       (progn
         (setq taz_s_solprof_xref_mode T)
-        (setq taz_s_vide_xref_before (taz_s_execution_design_get_last_entity))
         (command "_.SOLPROF")
         (command taz_s_solprof_xref_ss)
         (command "" "_Y" "_Y" "_Y")
         (taz_s_merge_solprof_layers)
-        (setq taz_s_vide_xref_new_ents
-          (taz_s_execution_design_collect_new_entities taz_s_vide_xref_before)
-        )
         (setq taz_s_solprof_xref_mode nil)
       )
+    )
+    (setq taz_s_vide_xref_entities
+      (taz_s_execution_design_collect_new_entities taz_s_vide_before_xref_entity)
     )
 
     ;; Podklad + beam / plate razem -> wspolny SOLPROF.
@@ -3453,21 +3456,24 @@
       )
     )
 
+    (setq taz_s_vide_before_combined_entity (taz_s_execution_design_get_last_entity))
     (if taz_s_solprof_ss
       (progn
         (setq taz_s_solprof_xref_mode nil)
-        (setq taz_s_vide_combined_before (taz_s_execution_design_get_last_entity))
         (command "_.SOLPROF")
         (command taz_s_solprof_ss)
         (command "" "_Y" "_Y" "_Y")
         (command "_.ERASE" taz_s_solprof_ss "")
         (taz_s_merge_solprof_layers)
-        (taz_s_solprof_mark_xref_duplicates
-          (taz_s_execution_design_collect_new_entities taz_s_vide_combined_before)
-          taz_s_vide_xref_new_ents
-        )
       )
     )
+    (setq taz_s_vide_combined_entities
+      (taz_s_execution_design_collect_new_entities taz_s_vide_before_combined_entity)
+    )
+
+    ;; Reklasyfikacja: krawedzie wspolnego przebiegu, ktore powielaja
+    ;; krawedzie samego podkladu, wracaja na warstwy xref_visible / xref_hidden.
+    (taz_s_vide_reclassify_edges taz_s_vide_combined_entities taz_s_vide_xref_entities)
 
     (command "_pspace")
     (command "_layout" "_S" "Model")
@@ -3685,24 +3691,23 @@
     ;; Podklad -> osobny SOLPROF.
     ;; Uwaga: bez ERASE tutaj - obiekty podkladu sa jeszcze potrzebne
     ;; w kolejnym, wspolnym przebiegu SOLPROF ponizej.
-    (setq taz_s_vide_xref_new_ents nil)
     (setq taz_s_solprof_xref_ss
       (ssget "_X" (list (cons 8 "taz_s_xref_editing_layer")))
     )
 
+    (setq taz_s_vide_before_xref_entity (taz_s_execution_design_get_last_entity))
     (if taz_s_solprof_xref_ss
       (progn
         (setq taz_s_solprof_xref_mode T)
-        (setq taz_s_vide_xref_before (taz_s_execution_design_get_last_entity))
         (command "_.SOLPROF")
         (command taz_s_solprof_xref_ss)
         (command "" "_Y" "_Y" "_Y")
         (taz_s_merge_solprof_layers)
-        (setq taz_s_vide_xref_new_ents
-          (taz_s_execution_design_collect_new_entities taz_s_vide_xref_before)
-        )
         (setq taz_s_solprof_xref_mode nil)
       )
+    )
+    (setq taz_s_vide_xref_entities
+      (taz_s_execution_design_collect_new_entities taz_s_vide_before_xref_entity)
     )
 
     ;; Podklad + beam / plate razem -> wspolny SOLPROF.
@@ -3717,21 +3722,24 @@
       )
     )
 
+    (setq taz_s_vide_before_combined_entity (taz_s_execution_design_get_last_entity))
     (if taz_s_solprof_ss
       (progn
         (setq taz_s_solprof_xref_mode nil)
-        (setq taz_s_vide_combined_before (taz_s_execution_design_get_last_entity))
         (command "_.SOLPROF")
         (command taz_s_solprof_ss)
         (command "" "_Y" "_Y" "_Y")
         (command "_.ERASE" taz_s_solprof_ss "")
         (taz_s_merge_solprof_layers)
-        (taz_s_solprof_mark_xref_duplicates
-          (taz_s_execution_design_collect_new_entities taz_s_vide_combined_before)
-          taz_s_vide_xref_new_ents
-        )
       )
     )
+    (setq taz_s_vide_combined_entities
+      (taz_s_execution_design_collect_new_entities taz_s_vide_before_combined_entity)
+    )
+
+    ;; Reklasyfikacja: krawedzie wspolnego przebiegu, ktore powielaja
+    ;; krawedzie samego podkladu, wracaja na warstwy xref_visible / xref_hidden.
+    (taz_s_vide_reclassify_edges taz_s_vide_combined_entities taz_s_vide_xref_entities)
 
     (command "_pspace")
     (command "_layout" "_S" "Model")
