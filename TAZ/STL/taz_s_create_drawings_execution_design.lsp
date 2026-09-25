@@ -2337,6 +2337,12 @@
   (setq taz_s_execution_design_table_groups '())
   (setq taz_s_execution_design_table_anchor_points '())
 
+  ;; Lista encji utworzonych przez 1. przebieg SOLPROF (sam podklad),
+  ;; zbierana ze wszystkich przypadkow IZO, X, Y, Z. Po zakonczeniu
+  ;; wszystkich przebiegow te encje zostana usuniete - sluza tylko
+  ;; jako material porownawczy dla taz_s_vide_correct_layers.
+  (setq taz_s_vide_xref_pass_entities_to_delete '())
+
   (setq taz_s_copy_nr 1)
   
   (defun taz_s_get_number (taz_s_txt / taz_s_i taz_s_len taz_s_pos)
@@ -3015,6 +3021,15 @@
       (command "" "_Y" "_Y" "_Y")
       (taz_s_merge_solprof_layers)
       (setq taz_s_solprof_xref_mode nil)
+      (setq taz_s_vide_xref_entities
+        (taz_s_execution_design_collect_new_entities taz_s_vide_before_xref_pass)
+      )
+      (setq taz_s_vide_xref_pass_entities_to_delete
+        (append
+          taz_s_vide_xref_pass_entities_to_delete
+          taz_s_vide_xref_entities
+        )
+      )
     )
   )
 
@@ -3216,6 +3231,15 @@
         (command "" "_Y" "_Y" "_Y")
         (taz_s_merge_solprof_layers)
         (setq taz_s_solprof_xref_mode nil)
+        (setq taz_s_vide_xref_entities
+          (taz_s_execution_design_collect_new_entities taz_s_vide_before_xref_pass)
+        )
+        (setq taz_s_vide_xref_pass_entities_to_delete
+          (append
+            taz_s_vide_xref_pass_entities_to_delete
+            taz_s_vide_xref_entities
+          )
+        )
       )
     )
 
@@ -3423,6 +3447,15 @@
         (command "" "_Y" "_Y" "_Y")
         (taz_s_merge_solprof_layers)
         (setq taz_s_solprof_xref_mode nil)
+        (setq taz_s_vide_xref_entities
+          (taz_s_execution_design_collect_new_entities taz_s_vide_before_xref_pass)
+        )
+        (setq taz_s_vide_xref_pass_entities_to_delete
+          (append
+            taz_s_vide_xref_pass_entities_to_delete
+            taz_s_vide_xref_entities
+          )
+        )
       )
     )
 
@@ -3681,6 +3714,15 @@
         (command "" "_Y" "_Y" "_Y")
         (taz_s_merge_solprof_layers)
         (setq taz_s_solprof_xref_mode nil)
+        (setq taz_s_vide_xref_entities
+          (taz_s_execution_design_collect_new_entities taz_s_vide_before_xref_pass)
+        )
+        (setq taz_s_vide_xref_pass_entities_to_delete
+          (append
+            taz_s_vide_xref_pass_entities_to_delete
+            taz_s_vide_xref_entities
+          )
+        )
       )
     )
 
@@ -3716,6 +3758,27 @@
 
   (command "-LAYDEL" "N" "taz_s_execution_design" "" "_Y")
   (taz_s_merge_solprof_layers)
+
+  ;; ---------------------------------
+  ;; USUN ENCJE Z 1. PRZEBIEGU SOLPROF DLA PODKLADU
+  ;; ---------------------------------
+  ;; Te encje sluzyly tylko jako material porownawczy dla
+  ;; taz_s_vide_correct_layers (patrz przypadki IZO, X, Y, Z powyzej).
+  ;; Porownanie linii zostalo juz wykonane dla wszystkich przypadkow,
+  ;; wiec teraz mozna je bezpiecznie usunac.
+
+  (setq taz_s_vide_xref_pass_delete_walk_list taz_s_vide_xref_pass_entities_to_delete)
+
+  (while taz_s_vide_xref_pass_delete_walk_list
+
+    (setq taz_s_vide_xref_pass_current_entity (car taz_s_vide_xref_pass_delete_walk_list))
+
+    (if (and taz_s_vide_xref_pass_current_entity (entget taz_s_vide_xref_pass_current_entity))
+      (entdel taz_s_vide_xref_pass_current_entity)
+    )
+
+    (setq taz_s_vide_xref_pass_delete_walk_list (cdr taz_s_vide_xref_pass_delete_walk_list))
+  )
 
   ;; ---------------------------------
   ;; USUN ORYGINALNY MODEL I ORYGINALNE OSIE
