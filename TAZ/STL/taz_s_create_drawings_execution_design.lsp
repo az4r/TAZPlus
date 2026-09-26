@@ -1015,8 +1015,10 @@
   ;; KLASY ELEMENTOW
   ;;
   ;; 1) taz_s_beam / taz_s_plate = geometria z danymi
-  ;; 2) taz_s_axes                = osie, pomijane
-  ;; 3) kazdy inny 3DSOLID        = geometria referencyjna / podklad
+  ;; 2) taz_s_unassigned          = geometria modelu BEZ danych (bez atrybutow,
+  ;;                                 bez etykiet - dane po prostu nie istnieja)
+  ;; 3) taz_s_axes                = osie, pomijane
+  ;; 4) kazdy inny 3DSOLID        = geometria referencyjna / podklad
   ;;
   ;; Podklad NIE jest zwiazany z konkretna nazwa warstwy. Moze lezec
   ;; np. na 0, taz_s_xref albo dowolnej innej warstwie zrodlowej.
@@ -1041,6 +1043,8 @@
         (/= (strcase taz_s_layer_name_arg) "TAZ_S_EXECUTION_DESIGN")
         (/= (strcase taz_s_layer_name_arg) "TAZ_S_EDITING_LAYER")
         (/= (strcase taz_s_layer_name_arg) "TAZ_S_XREF_EDITING_LAYER")
+        ;; taz_s_unassigned to geometria modelu bez danych, a NIE podklad
+        (/= (strcase taz_s_layer_name_arg) "TAZ_S_UNASSIGNED")
       )
       nil
     )
@@ -2670,6 +2674,12 @@
     (ssadd taz_s_izo_copy_ent taz_s_izo_ss)
 
     (if (taz_s_is_data_layer taz_s_izo_copy_layer)
+      (ssadd taz_s_izo_copy_ent taz_s_izo_normal_ss)
+    )
+
+    ;; taz_s_unassigned to geometria modelu bez danych, a nie podklad,
+    ;; wiec dla porzadku trafia do tego samego zestawu co beam / plate.
+    (if (= (strcase taz_s_izo_copy_layer) "TAZ_S_UNASSIGNED")
       (ssadd taz_s_izo_copy_ent taz_s_izo_normal_ss)
     )
 
