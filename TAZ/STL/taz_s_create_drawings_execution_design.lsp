@@ -1056,10 +1056,11 @@
   ;;
   ;; Obslugiwane sa tylko typowe obiekty geometryczne, ktore moga byc
   ;; sciezka SWEEP:
-  ;;   LINE, ARC, CIRCLE, ELLIPSE, LWPOLYLINE, POLYLINE, SPLINE
+  ;;   LINE, LWPOLYLINE, POLYLINE
   ;;
-  ;; TEXT / MTEXT / INSERT / DIMENSION / HATCH i podobne obiekty sa
-  ;; celowo pomijane i nie biora udzialu w tym mechanizmie.
+  ;; Wszystkie inne typy obiektow (na przyklad TEXT, MTEXT, INSERT,
+  ;; DIMENSION, HATCH, ARC, CIRCLE, ELLIPSE, SPLINE) sa celowo
+  ;; pomijane i nie biora udzialu w tym mechanizmie.
   ;;
   ;; Zasada jest celowo prosta:
   ;;   1. odczytujemy dowolny latwo dostepny punkt krzywej,
@@ -1084,7 +1085,7 @@
         (setq taz_s_curve_layer (cdr (assoc 8 taz_s_curve_ed)))
         (and
           (member taz_s_curve_type
-            '("LINE" "ARC" "CIRCLE" "ELLIPSE" "LWPOLYLINE" "POLYLINE" "SPLINE")
+            '("LINE" "LWPOLYLINE" "POLYLINE")
           )
           (taz_s_is_xref_layer taz_s_curve_layer)
         )
@@ -1093,25 +1094,11 @@
     )
   )
 
-  ;; Iloczyn wektorowy - potrzebny tylko do wyznaczenia dowolnego
-  ;; rzeczywistego punktu ELLIPSE. Nie sluzy do ustawiania profilu.
-  (defun taz_s_cross3 (taz_s_a taz_s_b)
-    (list
-      (- (* (cadr taz_s_a) (caddr taz_s_b)) (* (caddr taz_s_a) (cadr taz_s_b)))
-      (- (* (caddr taz_s_a) (car taz_s_b)) (* (car taz_s_a) (caddr taz_s_b)))
-      (- (* (car taz_s_a) (cadr taz_s_b)) (* (cadr taz_s_a) (car taz_s_b)))
-    )
-  )
-
   ;; Zwraca dowolny praktyczny punkt nalezacy do / opisujacy krzywa.
-  ;; Dla SPLINE: najpierw bierzemy pierwszy FIT POINT (DXF 11), a gdy
-  ;; go nie ma - pierwszy CONTROL POINT (DXF 10). Kazdy poprawny SPLINE
-  ;; ma co najmniej punkty kontrolne, wiec nie wymagamy zadnego VL.
   (defun taz_s_get_xref_curve_point
     (taz_s_curve_ent
-      / taz_s_ed taz_s_type taz_s_p taz_s_c taz_s_r taz_s_a
-        taz_s_elev taz_s_vtx taz_s_major taz_s_minor taz_s_normal
-        taz_s_ratio taz_s_param)
+      / taz_s_ed taz_s_type taz_s_p
+        taz_s_elev taz_s_vtx)
 
     (setq taz_s_p nil)
     (if (and taz_s_curve_ent (entget taz_s_curve_ent))
@@ -1123,77 +1110,6 @@
           ;; Punkt poczatkowy linii jest zapisany bezposrednio w DXF 10.
           ((= taz_s_type "LINE")
             (setq taz_s_p (cdr (assoc 10 taz_s_ed)))
-          )
-
-          ;; Dla luku bierzemy jego rzeczywisty punkt startowy.
-          ((= taz_s_type "ARC")
-            (setq taz_s_c (cdr (assoc 10 taz_s_ed)))
-            (setq taz_s_r (cdr (assoc 40 taz_s_ed)))
-            (setq taz_s_a (cdr (assoc 50 taz_s_ed)))
-            (if (and taz_s_c taz_s_r taz_s_a)
-              (setq taz_s_p
-                (trans
-                  (list
-                    (+ (car taz_s_c) (* taz_s_r (cos taz_s_a)))
-                    (+ (cadr taz_s_c) (* taz_s_r (sin taz_s_a)))
-                    (caddr taz_s_c)
-                  )
-                  taz_s_curve_ent
-                  0
-                )
-              )
-            )
-          )
-
-          ;; Dla okregu wybieramy punkt na promieniu w lokalnym kierunku X.
-          ((= taz_s_type "CIRCLE")
-            (setq taz_s_c (cdr (assoc 10 taz_s_ed)))
-            (setq taz_s_r (cdr (assoc 40 taz_s_ed)))
-            (if (and taz_s_c taz_s_r)
-              (setq taz_s_p
-                (trans
-                  (list (+ (car taz_s_c) taz_s_r) (cadr taz_s_c) (caddr taz_s_c))
-                  taz_s_curve_ent
-                  0
-                )
-              )
-            )
-          )
-
-          ;; Punkt ELLIPSE dla jej parametru poczatkowego.
-          ;; DXF 10 = srodek, 11 = wektor osi glownej, 40 = stosunek osi,
-          ;; 41 = parametr poczatkowy, 210 = normalna.
-          ((= taz_s_type "ELLIPSE")
-            (setq taz_s_c (cdr (assoc 10 taz_s_ed)))
-            (setq taz_s_major (cdr (assoc 11 taz_s_ed)))
-            (setq taz_s_ratio (cdr (assoc 40 taz_s_ed)))
-            (setq taz_s_param (cdr (assoc 41 taz_s_ed)))
-            (setq taz_s_normal (cdr (assoc 210 taz_s_ed)))
-            (if (not taz_s_normal) (setq taz_s_normal '(0.0 0.0 1.0)))
-            (if (not taz_s_param) (setq taz_s_param 0.0))
-            (if (and taz_s_c taz_s_major taz_s_ratio)
-              (progn
-                (setq taz_s_minor
-                  (mapcar
-                    '(lambda (taz_s_q) (* taz_s_q taz_s_ratio))
-                    (taz_s_cross3 taz_s_normal taz_s_major)
-                  )
-                )
-                (setq taz_s_p
-                  (list
-                    (+ (car taz_s_c)
-                       (* (car taz_s_major) (cos taz_s_param))
-                       (* (car taz_s_minor) (sin taz_s_param)))
-                    (+ (cadr taz_s_c)
-                       (* (cadr taz_s_major) (cos taz_s_param))
-                       (* (cadr taz_s_minor) (sin taz_s_param)))
-                    (+ (caddr taz_s_c)
-                       (* (caddr taz_s_major) (cos taz_s_param))
-                       (* (caddr taz_s_minor) (sin taz_s_param)))
-                  )
-                )
-              )
-            )
           )
 
           ;; Pierwszy wierzcholek LWPOLYLINE. DXF 10 jest w OCS,
@@ -1235,15 +1151,6 @@
                   (setq taz_s_p (trans taz_s_p taz_s_curve_ent 0))
                 )
               )
-            )
-          )
-
-          ;; Wszystkie SPLINE: fit point jesli istnieje, inaczej control point.
-          ;; Nie wyznaczamy stycznej ani parametru krzywej.
-          ((= taz_s_type "SPLINE")
-            (setq taz_s_p (cdr (assoc 11 taz_s_ed)))
-            (if (not taz_s_p)
-              (setq taz_s_p (cdr (assoc 10 taz_s_ed)))
             )
           )
         )
@@ -1357,7 +1264,7 @@
         (list
           (cons -4 "<AND")
           (cons 67 0)
-          (cons 0 "LINE,ARC,CIRCLE,ELLIPSE,LWPOLYLINE,POLYLINE,SPLINE")
+          (cons 0 "LINE,LWPOLYLINE,POLYLINE")
           (cons -4 "AND>")
         )
       )
