@@ -1062,6 +1062,12 @@
   ;; DIMENSION, HATCH, ARC, CIRCLE, ELLIPSE, SPLINE) sa celowo
   ;; pomijane i nie biora udzialu w tym mechanizmie.
   ;;
+  ;; Dodatkowo obiekt musi lezec na warstwie podkladu (patrz funkcja
+  ;; taz_s_is_xref_layer) albo dokladnie na warstwie taz_s_unassigned.
+  ;; taz_s_unassigned to geometria modelu bez danych, a NIE podklad -
+  ;; dlatego powstala z niej bryla tymczasowa jest pozniej traktowana
+  ;; jak model, a nie jak podklad.
+  ;;
   ;; Zasada jest celowo prosta:
   ;;   1. odczytujemy dowolny latwo dostepny punkt krzywej,
   ;;   2. w tym punkcie tworzymy zwykle CIRCLE o srednicy 0.001,
@@ -1069,7 +1075,9 @@
   ;;   3. SWEEP ma Alignment=Yes, wiec GstarCAD sam dopasowuje profil
   ;;      do kierunku sciezki,
   ;;   4. zamkniety profil CIRCLE + tryb Solid daje prawdziwy 3DSOLID,
-  ;;   5. dalej generator traktuje ten obiekt jak kazdy inny solid podkladu.
+  ;;   5. dalej generator traktuje te bryle tak samo jak inne 3DSOLID
+  ;;      na tej samej warstwie - jako podklad albo jako geometrie
+  ;;      modelu, zaleznie od warstwy zrodlowej krzywej.
   ;;
   ;; Bez VL / VLA / VLAX / COM.
   ;; ---------------------------------
@@ -1087,7 +1095,10 @@
           (member taz_s_curve_type
             '("LINE" "LWPOLYLINE" "POLYLINE")
           )
-          (taz_s_is_xref_layer taz_s_curve_layer)
+          (or
+            (taz_s_is_xref_layer taz_s_curve_layer)
+            (= (strcase taz_s_curve_layer) "TAZ_S_UNASSIGNED")
+          )
         )
       )
       nil
