@@ -16,7 +16,7 @@
 
       (progn
 
-        (command "_.EXPLODE" taz_g_zbior_blokow "")
+        (command "_.EXPLODE" taz_g_zbior_blokow)
 
         (setq taz_g_zbior_blokow nil)
 
