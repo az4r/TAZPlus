@@ -1,4 +1,8 @@
 (defun taz_instalacja()
+  (if (equal (vl-string-search ";C:\\TAZ\\GEN" (vla-get-SupportPath (vla-get-files  (vla-get-preferences (vlax-get-Acad-object))))) nil)
+    (vla-put-SupportPath (vla-get-files  (vla-get-preferences (vlax-get-Acad-object))) (strcat (vla-get-SupportPath (vla-get-files  (vla-get-preferences (vlax-get-Acad-object)))) ";C:\\TAZ\\GEN"))
+    (princ)
+  )
   (if (equal (vl-string-search ";C:\\TAZ\\STL" (vla-get-SupportPath (vla-get-files  (vla-get-preferences (vlax-get-Acad-object))))) nil)
     (vla-put-SupportPath (vla-get-files  (vla-get-preferences (vlax-get-Acad-object))) (strcat (vla-get-SupportPath (vla-get-files  (vla-get-preferences (vlax-get-Acad-object)))) ";C:\\TAZ\\STL"))
     (princ)
