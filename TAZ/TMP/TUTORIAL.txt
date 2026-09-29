@@ -1,3 +1,7 @@
+################
+### TUTORIAL ###
+################
+
 1. Import external reference model to GstarCAD (.dwg or another format).
 2. Load and use Use taz_explode_blocks.lsp script.
 3. Export xref to IFC2X3.
