@@ -18,6 +18,6 @@
 )
 (taz_instalacja)
 (vla-load (vla-get-menugroups (vlax-get-acad-object)) "C:\\TAZ\\taz.cuix")
-(command "-TOOLBAR" "TAZ" "Float" "50,230" "1")
+(command "-TOOLBAR" "TAZ" "Float" "30,220" "1")
 (princ "\n########## ZAINSTALOWANO TOOLBAR AZ ##########")
 (princ)
