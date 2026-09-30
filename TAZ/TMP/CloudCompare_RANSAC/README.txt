@@ -1,0 +1,2 @@
+1. This location must be valid: "C:\CloudCompare_RANSAC\export_ransac.py"
+2. Run CloudCompare software, open Python REPL (Python Plugin must be installed) and paste the command: exec(open(r"C:\CloudCompare_RANSAC\export_ransac.py").read())
