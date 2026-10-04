@@ -248,6 +248,7 @@
   (write-line (strcat "(setq taz_s_" taz_s_attribs_object_name_new "_sweep_p2 (list " (rtos taz_s_p2x 2 6) " " (rtos taz_s_p2y 2 6) " " (rtos taz_s_p2z 2 6) "))") taz_s_f_beam_data)
 
   (close taz_s_f_beam_data)
+  (c:taz_s_rebuild_data)
   
   ;;(setq taz_s_data_file taz_s_f_beam_data)
   ;;(taz_s_cleanup_data_file)
