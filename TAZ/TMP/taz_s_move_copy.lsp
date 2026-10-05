@@ -13,6 +13,9 @@
 ;;        - przyciski OK i Anuluj
 ;;   4. OK     -> alert z ename obiektów, trybem (Move / Copy)
 ;;                oraz wartościami X, Y, Z z okna DCL
+;;                (pod ename obiektu, który ma atrybuty w pliku
+;;                 taz_s_beam_data.txt: handle oraz atrybuty
+;;                 section_angle, section_position, sweep_p1, sweep_p2)
 ;;      Anuluj -> przerwanie działania skryptu
 ;;
 ;; Na tym etapie skrypt niczego nie zmienia w rysunku.
@@ -176,9 +179,128 @@
 )
 
 ;; ---------------------------------------------------------
+;; ATRYBUTY OBIEKTU DO ALERTU
+;; Dla obiektu z globalnej zmiennej taz_s_move_copy_alert_ename:
+;;   1. pobiera handle obiektu (kod DXF 5) - z niego zbudowane
+;;      są nazwy zmiennych w pliku taz_s_beam_data.txt,
+;;   2. sprawdza, czy istnieją zmienne:
+;;        taz_s_<handle>_section_angle
+;;        taz_s_<handle>_section_position
+;;        taz_s_<handle>_sweep_p1
+;;        taz_s_<handle>_sweep_p2
+;;   3. wynik zapisuje w zmiennej taz_s_move_copy_attr_text:
+;;        - obiekt bez żadnego z tych atrybutów -> tekst pusty,
+;;        - obiekt z atrybutami -> linia z handle oraz po jednej
+;;          linii dla każdego atrybutu, który istnieje.
+;; Wartości zmiennych muszą być już wczytane z pliku danych
+;; (robi to taz_s_move_copy_show_alert przed pętlą).
+;; ---------------------------------------------------------
+
+(defun taz_s_move_copy_attributes_text ()
+
+  ;; na początku wszystko puste - żeby nic nie zostało
+  ;; po poprzednio sprawdzanym obiekcie
+  (setq taz_s_move_copy_attr_text "")
+  (setq taz_s_move_copy_attr_handle nil)
+  (setq taz_s_move_copy_attr_angle nil)
+  (setq taz_s_move_copy_attr_position nil)
+  (setq taz_s_move_copy_attr_p1 nil)
+  (setq taz_s_move_copy_attr_p2 nil)
+
+  ;; handle obiektu (kod DXF 5)
+  (setq taz_s_move_copy_attr_entity_data (entget taz_s_move_copy_alert_ename))
+  (setq taz_s_move_copy_attr_handle (cdr (assoc 5 taz_s_move_copy_attr_entity_data)))
+
+  ;; nazwy zmiennych i ich wartości
+  ;; (wartość nil oznacza, że taka zmienna nie istnieje)
+  (if taz_s_move_copy_attr_handle
+    (progn
+
+      (setq taz_s_move_copy_attr_name_angle (strcat "taz_s_" taz_s_move_copy_attr_handle "_section_angle"))
+      (setq taz_s_move_copy_attr_name_position (strcat "taz_s_" taz_s_move_copy_attr_handle "_section_position"))
+      (setq taz_s_move_copy_attr_name_p1 (strcat "taz_s_" taz_s_move_copy_attr_handle "_sweep_p1"))
+      (setq taz_s_move_copy_attr_name_p2 (strcat "taz_s_" taz_s_move_copy_attr_handle "_sweep_p2"))
+
+      (setq taz_s_move_copy_attr_angle (eval (read taz_s_move_copy_attr_name_angle)))
+      (setq taz_s_move_copy_attr_position (eval (read taz_s_move_copy_attr_name_position)))
+      (setq taz_s_move_copy_attr_p1 (eval (read taz_s_move_copy_attr_name_p1)))
+      (setq taz_s_move_copy_attr_p2 (eval (read taz_s_move_copy_attr_name_p2)))
+
+    )
+    (princ)
+  )
+
+  ;; section_angle
+  (if taz_s_move_copy_attr_angle
+    (progn
+      (setq taz_s_move_copy_attr_value_text (rtos taz_s_move_copy_attr_angle 2 6))
+      (setq taz_s_move_copy_attr_line (strcat "   section_angle: " taz_s_move_copy_attr_value_text "\n"))
+      (setq taz_s_move_copy_attr_text (strcat taz_s_move_copy_attr_text taz_s_move_copy_attr_line))
+    )
+    (princ)
+  )
+
+  ;; section_position
+  (if taz_s_move_copy_attr_position
+    (progn
+      (setq taz_s_move_copy_attr_value_text (rtos taz_s_move_copy_attr_position 2 0))
+      (setq taz_s_move_copy_attr_line (strcat "   section_position: " taz_s_move_copy_attr_value_text "\n"))
+      (setq taz_s_move_copy_attr_text (strcat taz_s_move_copy_attr_text taz_s_move_copy_attr_line))
+    )
+    (princ)
+  )
+
+  ;; sweep_p1
+  (if taz_s_move_copy_attr_p1
+    (progn
+      (setq taz_s_move_copy_attr_x (car taz_s_move_copy_attr_p1))
+      (setq taz_s_move_copy_attr_y (cadr taz_s_move_copy_attr_p1))
+      (setq taz_s_move_copy_attr_z (caddr taz_s_move_copy_attr_p1))
+      (setq taz_s_move_copy_attr_x_text (rtos taz_s_move_copy_attr_x 2 6))
+      (setq taz_s_move_copy_attr_y_text (rtos taz_s_move_copy_attr_y 2 6))
+      (setq taz_s_move_copy_attr_z_text (rtos taz_s_move_copy_attr_z 2 6))
+      (setq taz_s_move_copy_attr_line (strcat "   sweep_p1: (" taz_s_move_copy_attr_x_text ", " taz_s_move_copy_attr_y_text ", " taz_s_move_copy_attr_z_text ")\n"))
+      (setq taz_s_move_copy_attr_text (strcat taz_s_move_copy_attr_text taz_s_move_copy_attr_line))
+    )
+    (princ)
+  )
+
+  ;; sweep_p2
+  (if taz_s_move_copy_attr_p2
+    (progn
+      (setq taz_s_move_copy_attr_x (car taz_s_move_copy_attr_p2))
+      (setq taz_s_move_copy_attr_y (cadr taz_s_move_copy_attr_p2))
+      (setq taz_s_move_copy_attr_z (caddr taz_s_move_copy_attr_p2))
+      (setq taz_s_move_copy_attr_x_text (rtos taz_s_move_copy_attr_x 2 6))
+      (setq taz_s_move_copy_attr_y_text (rtos taz_s_move_copy_attr_y 2 6))
+      (setq taz_s_move_copy_attr_z_text (rtos taz_s_move_copy_attr_z 2 6))
+      (setq taz_s_move_copy_attr_line (strcat "   sweep_p2: (" taz_s_move_copy_attr_x_text ", " taz_s_move_copy_attr_y_text ", " taz_s_move_copy_attr_z_text ")\n"))
+      (setq taz_s_move_copy_attr_text (strcat taz_s_move_copy_attr_text taz_s_move_copy_attr_line))
+    )
+    (princ)
+  )
+
+  ;; linia z handle - tylko wtedy, gdy obiekt ma jakikolwiek atrybut
+  ;; (dopisana na początku, czyli tuż pod ename)
+  (if (/= taz_s_move_copy_attr_text "")
+    (progn
+      (setq taz_s_move_copy_attr_handle_line (strcat "   handle: " taz_s_move_copy_attr_handle "\n"))
+      (setq taz_s_move_copy_attr_text (strcat taz_s_move_copy_attr_handle_line taz_s_move_copy_attr_text))
+    )
+    (princ)
+  )
+
+  (princ)
+
+)
+
+;; ---------------------------------------------------------
 ;; ALERT Z PODSUMOWANIEM
 ;; Wypisuje: ename zaznaczonych obiektów, tryb (Move / Copy)
 ;; oraz wartości przesunięcia X, Y, Z pobrane z okna DCL.
+;; Pod ename obiektu, który ma atrybuty w pliku danych belek,
+;; dopisuje jego handle i atrybuty (patrz funkcja
+;; taz_s_move_copy_attributes_text).
 ;; ---------------------------------------------------------
 
 (defun taz_s_move_copy_show_alert ()
@@ -202,6 +324,18 @@
 
   (setq taz_s_move_copy_alert_text (strcat taz_s_move_copy_alert_text "Ename zaznaczonych obiektów:\n"))
 
+  ;; wczytanie pliku z danymi belek (jeżeli istnieje)
+  ;; Dzięki temu zmienne z atrybutami są w pamięci także dla belek
+  ;; utworzonych w tej sesji - taz_s_create_beam zapisuje je
+  ;; tylko do pliku, bez wczytywania.
+  (setq taz_s_move_copy_data_folder (taz_s_path))
+  (setq taz_s_move_copy_data_file (strcat taz_s_move_copy_data_folder "taz_s_beam_data.txt"))
+
+  (if (findfile taz_s_move_copy_data_file)
+    (load taz_s_move_copy_data_file)
+    (princ)
+  )
+
   ;; ename każdego obiektu - każdy w osobnej linii
   ;; vl-princ-to-string to jedyna funkcja VL w tym skrypcie:
   ;; alert przyjmuje tylko tekst, a zwykłe funkcje AutoLISP
@@ -213,6 +347,11 @@
     (setq taz_s_move_copy_alert_ename_text (vl-princ-to-string taz_s_move_copy_alert_ename))
     (setq taz_s_move_copy_alert_text (strcat taz_s_move_copy_alert_text taz_s_move_copy_alert_ename_text))
     (setq taz_s_move_copy_alert_text (strcat taz_s_move_copy_alert_text "\n"))
+
+    ;; atrybuty tego obiektu (jeżeli je ma) - dopisane pod ename
+    (taz_s_move_copy_attributes_text)
+    (setq taz_s_move_copy_alert_text (strcat taz_s_move_copy_alert_text taz_s_move_copy_attr_text))
+
     (setq taz_s_move_copy_alert_index (+ taz_s_move_copy_alert_index 1))
   )
 
