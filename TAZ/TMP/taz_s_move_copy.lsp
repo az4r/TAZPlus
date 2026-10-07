@@ -2,7 +2,7 @@
 ;; taz_s_move_copy.lsp
 ;; Komenda: TAZ_S_MOVE_COPY
 ;;
-;; ETAP 1 - wersja robocza:
+;; ETAP 2 - wersja robocza:
 ;;   1. Wybór obiektów. Można zaznaczyć zarówno obiekty modelu
 ;;      (z atrybutami), jak i obiekty bez atrybutów.
 ;;   2. Z zaznaczenia powstaje lista ename.
@@ -11,14 +11,18 @@
 ;;        - pola tekstowe: X, Y, Z
 ;;        - przycisk Point (na razie bez działania)
 ;;        - przyciski OK i Anuluj
-;;   4. OK     -> alert z ename obiektów, trybem (Move / Copy)
-;;                oraz wartościami X, Y, Z z okna DCL
-;;                (pod ename obiektu, który ma atrybuty w pliku
-;;                 taz_s_beam_data.txt: handle oraz atrybuty
-;;                 section_angle, section_position, sweep_p1, sweep_p2)
+;;   4. OK     -> dla każdego zaznaczonego obiektu:
+;;                - obiekt z atrybutami w pliku taz_s_beam_data.txt
+;;                  (section_angle, section_position, sweep_p1, sweep_p2):
+;;                  do sweep_p1 i sweep_p2 dodawane są X, Y, Z z okna DCL,
+;;                  z nowych punktów taz_s_create_beam tworzy nową bryłę,
+;;                  a atrybuty starej bryły są przenoszone na nową
+;;                  (w pamięci i w pliku taz_s_beam_data.txt),
+;;                - obiekt bez atrybutów: komenda COPY o wektor X, Y, Z.
 ;;      Anuluj -> przerwanie działania skryptu
 ;;
-;; Na tym etapie skrypt niczego nie zmienia w rysunku.
+;; Na razie Move i Copy działają tak samo: stare obiekty zostają
+;; nietknięte, powstają tylko nowe.
 ;; =========================================================
 
 (defun c:taz_s_move_copy ()
@@ -137,11 +141,11 @@
   )
 
   ;; ---------------------------------------------------------
-  ;; OK -> ALERT Z PODSUMOWANIEM
+  ;; OK -> PRZESUNIĘCIE / KOPIOWANIE OBIEKTÓW
   ;; ---------------------------------------------------------
 
   (if (and taz_s_move_copy_can_continue (= taz_s_move_copy_dialog_result 1))
-    (taz_s_move_copy_show_alert)
+    (taz_s_move_copy_run)
     (princ)
   )
 
@@ -179,28 +183,56 @@
 )
 
 ;; ---------------------------------------------------------
-;; ATRYBUTY OBIEKTU DO ALERTU
-;; Dla obiektu z globalnej zmiennej taz_s_move_copy_alert_ename:
-;;   1. pobiera handle obiektu (kod DXF 5) - z niego zbudowane
-;;      są nazwy zmiennych w pliku taz_s_beam_data.txt,
-;;   2. sprawdza, czy istnieją zmienne:
-;;        taz_s_<handle>_section_angle
-;;        taz_s_<handle>_section_position
-;;        taz_s_<handle>_sweep_p1
-;;        taz_s_<handle>_sweep_p2
-;;   3. wynik zapisuje w zmiennej taz_s_move_copy_attr_text:
-;;        - obiekt bez żadnego z tych atrybutów -> tekst pusty,
-;;        - obiekt z atrybutami -> linia z handle oraz po jednej
-;;          linii dla każdego atrybutu, który istnieje.
-;; Wartości zmiennych muszą być już wczytane z pliku danych
-;; (robi to taz_s_move_copy_show_alert przed pętlą).
+;; ZAMIANA PRZECINKA NA KROPKĘ
+;; Tekst z globalnej zmiennej taz_s_move_copy_comma_input
+;; zamienia na tekst w zmiennej taz_s_move_copy_comma_output
+;; (każdy przecinek zamieniony na kropkę).
+;; Potrzebne, bo atof kończy odczyt na przecinku: "12,5" da 12.
 ;; ---------------------------------------------------------
 
-(defun taz_s_move_copy_attributes_text ()
+(defun taz_s_move_copy_replace_comma ()
+
+  (setq taz_s_move_copy_comma_output "")
+  (setq taz_s_move_copy_comma_length (strlen taz_s_move_copy_comma_input))
+  (setq taz_s_move_copy_comma_index 1)
+
+  (while (<= taz_s_move_copy_comma_index taz_s_move_copy_comma_length)
+
+    (setq taz_s_move_copy_comma_char (substr taz_s_move_copy_comma_input taz_s_move_copy_comma_index 1))
+
+    (if (= taz_s_move_copy_comma_char ",")
+      (setq taz_s_move_copy_comma_char ".")
+      (princ)
+    )
+
+    (setq taz_s_move_copy_comma_output (strcat taz_s_move_copy_comma_output taz_s_move_copy_comma_char))
+    (setq taz_s_move_copy_comma_index (+ taz_s_move_copy_comma_index 1))
+
+  )
+
+  (princ)
+
+)
+
+;; ---------------------------------------------------------
+;; ODCZYT HANDLE I ATRYBUTÓW OBIEKTU
+;; Dla obiektu z globalnej zmiennej taz_s_move_copy_run_ename:
+;;   1. pobiera handle obiektu (kod DXF 5) - z niego zbudowane
+;;      są nazwy zmiennych w pliku taz_s_beam_data.txt,
+;;   2. odczytuje zmienne:
+;;        taz_s_<handle>_section_angle    -> taz_s_move_copy_attr_angle
+;;        taz_s_<handle>_section_position -> taz_s_move_copy_attr_position
+;;        taz_s_<handle>_sweep_p1         -> taz_s_move_copy_attr_p1
+;;        taz_s_<handle>_sweep_p2         -> taz_s_move_copy_attr_p2
+;;      (wartość nil oznacza, że taka zmienna nie istnieje).
+;; Wartości zmiennych muszą być już wczytane z pliku danych
+;; (robi to taz_s_move_copy_run przed pętlą).
+;; ---------------------------------------------------------
+
+(defun taz_s_move_copy_read_attributes ()
 
   ;; na początku wszystko puste - żeby nic nie zostało
   ;; po poprzednio sprawdzanym obiekcie
-  (setq taz_s_move_copy_attr_text "")
   (setq taz_s_move_copy_attr_handle nil)
   (setq taz_s_move_copy_attr_angle nil)
   (setq taz_s_move_copy_attr_position nil)
@@ -208,7 +240,7 @@
   (setq taz_s_move_copy_attr_p2 nil)
 
   ;; handle obiektu (kod DXF 5)
-  (setq taz_s_move_copy_attr_entity_data (entget taz_s_move_copy_alert_ename))
+  (setq taz_s_move_copy_attr_entity_data (entget taz_s_move_copy_run_ename))
   (setq taz_s_move_copy_attr_handle (cdr (assoc 5 taz_s_move_copy_attr_entity_data)))
 
   ;; nazwy zmiennych i ich wartości
@@ -230,62 +262,284 @@
     (princ)
   )
 
-  ;; section_angle
-  (if taz_s_move_copy_attr_angle
+  (princ)
+
+)
+
+;; ---------------------------------------------------------
+;; KATEGORIA PRZEKROJU Z RODZINY PROFILU
+;; Na podstawie globalnej zmiennej taz_s_family ustawia
+;; taz_s_category (tak samo jak skrypty edycji, bo w trybie
+;; edycji taz_s_create_beam pomija taz_s_select_section).
+;; Nieznana rodzina -> taz_s_category = nil.
+;; ---------------------------------------------------------
+
+(defun taz_s_move_copy_set_category ()
+
+  (setq taz_s_category nil)
+
+  (if (= taz_s_family "HEA")
+    (setq taz_s_category "Dwuteowniki")
+    (princ)
+  )
+  (if (= taz_s_family "HEB")
+    (setq taz_s_category "Dwuteowniki")
+    (princ)
+  )
+  (if (= taz_s_family "IPE")
+    (setq taz_s_category "Dwuteowniki")
+    (princ)
+  )
+  (if (= taz_s_family "IPN")
+    (setq taz_s_category "Dwuteowniki")
+    (princ)
+  )
+  (if (= taz_s_family "UPE")
+    (setq taz_s_category "Ceowniki")
+    (princ)
+  )
+  (if (= taz_s_family "UPN")
+    (setq taz_s_category "Ceowniki")
+    (princ)
+  )
+  (if (= taz_s_family "LR")
+    (setq taz_s_category "Katowniki")
+    (princ)
+  )
+  (if (= taz_s_family "LN")
+    (setq taz_s_category "Katowniki")
+    (princ)
+  )
+  (if (= taz_s_family "SHS")
+    (setq taz_s_category "Rury")
+    (princ)
+  )
+  (if (= taz_s_family "RHS")
+    (setq taz_s_category "Rury")
+    (princ)
+  )
+  (if (= taz_s_family "CHS")
+    (setq taz_s_category "Rury")
+    (princ)
+  )
+
+  (princ)
+
+)
+
+;; ---------------------------------------------------------
+;; ZAPIS ATRYBUTÓW NOWEJ BRYŁY DO PLIKU
+;; Dopisuje na końcu pliku taz_s_data_file linie dla handle
+;; nowej bryły (taz_s_move_copy_new_handle): attr1-attr10,
+;; section_angle, section_position (stare wartości) oraz
+;; sweep_p1 i sweep_p2 (nowe punkty). Format taki sam jak
+;; w taz_s_create_beam i w skryptach edycji.
+;; ---------------------------------------------------------
+
+(defun taz_s_move_copy_write_beam_data ()
+
+  ;; liczby jako tekst (6 miejsc po przecinku, tak jak w taz_s_create_beam)
+  (setq taz_s_move_copy_text_angle (rtos taz_s_move_copy_old_angle 2 6))
+  (setq taz_s_move_copy_text_position (rtos taz_s_move_copy_old_position 2 0))
+
+  (setq taz_s_move_copy_text_p1_x (rtos taz_s_move_copy_new_p1_x 2 6))
+  (setq taz_s_move_copy_text_p1_y (rtos taz_s_move_copy_new_p1_y 2 6))
+  (setq taz_s_move_copy_text_p1_z (rtos taz_s_move_copy_new_p1_z 2 6))
+
+  (setq taz_s_move_copy_text_p2_x (rtos taz_s_move_copy_new_p2_x 2 6))
+  (setq taz_s_move_copy_text_p2_y (rtos taz_s_move_copy_new_p2_y 2 6))
+  (setq taz_s_move_copy_text_p2_z (rtos taz_s_move_copy_new_p2_z 2 6))
+
+  ;; "a" oznacza dopisywanie na koniec - poprzednie dane nie znikają
+  (setq taz_s_move_copy_file (open taz_s_data_file "a"))
+
+  (write-line (strcat "(setq taz_s_" taz_s_move_copy_new_handle "_attr1 \"" taz_s_move_copy_old_attr1 "\")") taz_s_move_copy_file)
+  (write-line (strcat "(setq taz_s_" taz_s_move_copy_new_handle "_attr2 \"" taz_s_move_copy_old_attr2 "\")") taz_s_move_copy_file)
+  (write-line (strcat "(setq taz_s_" taz_s_move_copy_new_handle "_attr3 \"" taz_s_move_copy_old_attr3 "\")") taz_s_move_copy_file)
+  (write-line (strcat "(setq taz_s_" taz_s_move_copy_new_handle "_attr4 \"" taz_s_move_copy_old_attr4 "\")") taz_s_move_copy_file)
+  (write-line (strcat "(setq taz_s_" taz_s_move_copy_new_handle "_attr5 \"" taz_s_move_copy_old_attr5 "\")") taz_s_move_copy_file)
+  (write-line (strcat "(setq taz_s_" taz_s_move_copy_new_handle "_attr6 \"" taz_s_move_copy_old_attr6 "\")") taz_s_move_copy_file)
+  (write-line (strcat "(setq taz_s_" taz_s_move_copy_new_handle "_attr7 \"" taz_s_move_copy_old_attr7 "\")") taz_s_move_copy_file)
+  (write-line (strcat "(setq taz_s_" taz_s_move_copy_new_handle "_attr8 \"" taz_s_move_copy_old_attr8 "\")") taz_s_move_copy_file)
+  (write-line (strcat "(setq taz_s_" taz_s_move_copy_new_handle "_attr9 \"" taz_s_move_copy_old_attr9 "\")") taz_s_move_copy_file)
+  (write-line (strcat "(setq taz_s_" taz_s_move_copy_new_handle "_attr10 \"" taz_s_move_copy_old_attr10 "\")") taz_s_move_copy_file)
+
+  (write-line (strcat "(setq taz_s_" taz_s_move_copy_new_handle "_section_angle " taz_s_move_copy_text_angle ")") taz_s_move_copy_file)
+  (write-line (strcat "(setq taz_s_" taz_s_move_copy_new_handle "_section_position " taz_s_move_copy_text_position ")") taz_s_move_copy_file)
+
+  (write-line (strcat "(setq taz_s_" taz_s_move_copy_new_handle "_sweep_p1 (list " taz_s_move_copy_text_p1_x " " taz_s_move_copy_text_p1_y " " taz_s_move_copy_text_p1_z "))") taz_s_move_copy_file)
+  (write-line (strcat "(setq taz_s_" taz_s_move_copy_new_handle "_sweep_p2 (list " taz_s_move_copy_text_p2_x " " taz_s_move_copy_text_p2_y " " taz_s_move_copy_text_p2_z "))") taz_s_move_copy_file)
+
+  (close taz_s_move_copy_file)
+
+  (princ)
+
+)
+
+;; ---------------------------------------------------------
+;; OBIEKT Z ATRYBUTAMI -> NOWA BRYŁA
+;; Dla obiektu z globalnej zmiennej taz_s_move_copy_run_ename
+;; (atrybuty już odczytane przez taz_s_move_copy_read_attributes):
+;;   1. odczytuje atrybuty starej bryły (przed utworzeniem nowej),
+;;   2. nowe punkty = stare sweep_p1 i sweep_p2 + X, Y, Z z okna DCL,
+;;   3. tworzy nową bryłę przez taz_s_create_beam w trybie edycji
+;;      ścieżki (nowe punkty przekazywane zmiennymi
+;;      taz_s_edit_new_path_p1 i taz_s_edit_new_path_p2),
+;;   4. przenosi atrybuty ze starej bryły na nową - w pamięci
+;;      i w pliku taz_s_beam_data.txt.
+;; Stara bryła zostaje nietknięta.
+;; ---------------------------------------------------------
+
+(defun taz_s_move_copy_new_beam ()
+
+  (setq taz_s_move_copy_beam_ok T)
+
+  ;; --- stara bryła: handle i atrybuty (PRZED utworzeniem nowej) ---
+
+  (setq taz_s_move_copy_old_handle taz_s_move_copy_attr_handle)
+  (setq taz_s_move_copy_old_angle taz_s_move_copy_attr_angle)
+  (setq taz_s_move_copy_old_position taz_s_move_copy_attr_position)
+  (setq taz_s_move_copy_old_p1 taz_s_move_copy_attr_p1)
+  (setq taz_s_move_copy_old_p2 taz_s_move_copy_attr_p2)
+
+  (setq taz_s_move_copy_old_attr1 (eval (read (strcat "taz_s_" taz_s_move_copy_old_handle "_attr1"))))
+  (setq taz_s_move_copy_old_attr2 (eval (read (strcat "taz_s_" taz_s_move_copy_old_handle "_attr2"))))
+  (setq taz_s_move_copy_old_attr3 (eval (read (strcat "taz_s_" taz_s_move_copy_old_handle "_attr3"))))
+  (setq taz_s_move_copy_old_attr4 (eval (read (strcat "taz_s_" taz_s_move_copy_old_handle "_attr4"))))
+  (setq taz_s_move_copy_old_attr5 (eval (read (strcat "taz_s_" taz_s_move_copy_old_handle "_attr5"))))
+  (setq taz_s_move_copy_old_attr6 (eval (read (strcat "taz_s_" taz_s_move_copy_old_handle "_attr6"))))
+  (setq taz_s_move_copy_old_attr7 (eval (read (strcat "taz_s_" taz_s_move_copy_old_handle "_attr7"))))
+  (setq taz_s_move_copy_old_attr8 (eval (read (strcat "taz_s_" taz_s_move_copy_old_handle "_attr8"))))
+  (setq taz_s_move_copy_old_attr9 (eval (read (strcat "taz_s_" taz_s_move_copy_old_handle "_attr9"))))
+  (setq taz_s_move_copy_old_attr10 (eval (read (strcat "taz_s_" taz_s_move_copy_old_handle "_attr10"))))
+
+  ;; brakujący atrybut (nil) zamieniamy na pusty tekst - inaczej strcat
+  ;; przy zapisie do pliku zgłosiłby błąd
+  (if (null taz_s_move_copy_old_attr1) (setq taz_s_move_copy_old_attr1 "") (princ))
+  (if (null taz_s_move_copy_old_attr2) (setq taz_s_move_copy_old_attr2 "") (princ))
+  (if (null taz_s_move_copy_old_attr3) (setq taz_s_move_copy_old_attr3 "") (princ))
+  (if (null taz_s_move_copy_old_attr4) (setq taz_s_move_copy_old_attr4 "") (princ))
+  (if (null taz_s_move_copy_old_attr5) (setq taz_s_move_copy_old_attr5 "") (princ))
+  (if (null taz_s_move_copy_old_attr6) (setq taz_s_move_copy_old_attr6 "") (princ))
+  (if (null taz_s_move_copy_old_attr7) (setq taz_s_move_copy_old_attr7 "") (princ))
+  (if (null taz_s_move_copy_old_attr8) (setq taz_s_move_copy_old_attr8 "") (princ))
+  (if (null taz_s_move_copy_old_attr9) (setq taz_s_move_copy_old_attr9 "") (princ))
+  (if (null taz_s_move_copy_old_attr10) (setq taz_s_move_copy_old_attr10 "") (princ))
+
+  ;; --- nowe punkty ścieżki: stare punkty + X, Y, Z z okna DCL ---
+
+  (setq taz_s_move_copy_new_p1_x (+ (car taz_s_move_copy_old_p1) taz_s_move_copy_offset_x))
+  (setq taz_s_move_copy_new_p1_y (+ (cadr taz_s_move_copy_old_p1) taz_s_move_copy_offset_y))
+  (setq taz_s_move_copy_new_p1_z (+ (caddr taz_s_move_copy_old_p1) taz_s_move_copy_offset_z))
+  (setq taz_s_move_copy_new_p1 (list taz_s_move_copy_new_p1_x taz_s_move_copy_new_p1_y taz_s_move_copy_new_p1_z))
+
+  (setq taz_s_move_copy_new_p2_x (+ (car taz_s_move_copy_old_p2) taz_s_move_copy_offset_x))
+  (setq taz_s_move_copy_new_p2_y (+ (cadr taz_s_move_copy_old_p2) taz_s_move_copy_offset_y))
+  (setq taz_s_move_copy_new_p2_z (+ (caddr taz_s_move_copy_old_p2) taz_s_move_copy_offset_z))
+  (setq taz_s_move_copy_new_p2 (list taz_s_move_copy_new_p2_x taz_s_move_copy_new_p2_y taz_s_move_copy_new_p2_z))
+
+  ;; --- rodzina, typ i kategoria przekroju (jak w skryptach edycji) ---
+
+  (setq taz_s_family taz_s_move_copy_old_attr6)
+  (setq taz_s_type taz_s_move_copy_old_attr7)
+  (taz_s_move_copy_set_category)
+
+  (if (null taz_s_category)
     (progn
-      (setq taz_s_move_copy_attr_value_text (rtos taz_s_move_copy_attr_angle 2 6))
-      (setq taz_s_move_copy_attr_line (strcat "   section_angle: " taz_s_move_copy_attr_value_text "\n"))
-      (setq taz_s_move_copy_attr_text (strcat taz_s_move_copy_attr_text taz_s_move_copy_attr_line))
+      (setq taz_s_move_copy_beam_ok nil)
+      (princ (strcat "\nPominięto belkę (handle " taz_s_move_copy_old_handle "): nieznana rodzina profilu."))
+      (setq taz_s_move_copy_count_errors (+ taz_s_move_copy_count_errors 1))
     )
     (princ)
   )
 
-  ;; section_position
-  (if taz_s_move_copy_attr_position
+  ;; --- nowa bryła: taz_s_create_beam w trybie edycji ścieżki ---
+
+  (if taz_s_move_copy_beam_ok
     (progn
-      (setq taz_s_move_copy_attr_value_text (rtos taz_s_move_copy_attr_position 2 0))
-      (setq taz_s_move_copy_attr_line (strcat "   section_position: " taz_s_move_copy_attr_value_text "\n"))
-      (setq taz_s_move_copy_attr_text (strcat taz_s_move_copy_attr_text taz_s_move_copy_attr_line))
+
+      ;; ostatni obiekt w rysunku PRZED wywołaniem (do sprawdzenia, czy coś powstało)
+      (setq taz_s_move_copy_last_before (entlast))
+
+      ;; dane dla taz_s_create_beam
+      ;; taz_s_attribs_object_name = handle STAREJ bryły (stąd czytany jest
+      ;; kąt i pozycja; taz_s_create_beam sam podmieni go na handle nowej)
+      (setq taz_s_attribs_object_name taz_s_move_copy_old_handle)
+      (setq taz_s_edit_new_path_p1 taz_s_move_copy_new_p1)
+      (setq taz_s_edit_new_path_p2 taz_s_move_copy_new_p2)
+
+      (setq taz_s_edit_section_angle_mode nil)
+      (setq taz_s_edit_section_position_mode nil)
+      (setq taz_s_edit_beam_path_mode T)
+      (setq taz_s_edit_mode T)
+
+      (c:taz_s_create_beam)
+
+      (setq taz_s_edit_mode nil)
+      (setq taz_s_edit_beam_path_mode nil)
+
+      ;; --- sprawdzenie: czy powstała NOWA bryła 3DSOLID ---
+
+      (setq taz_s_move_copy_new_ename (entlast))
+      (setq taz_s_move_copy_new_type (cdr (assoc 0 (entget taz_s_move_copy_new_ename))))
+
+      (setq taz_s_move_copy_created_ok T)
+
+      (if (equal taz_s_move_copy_new_ename taz_s_move_copy_last_before)
+        (setq taz_s_move_copy_created_ok nil)
+        (princ)
+      )
+
+      (if (/= taz_s_move_copy_new_type "3DSOLID")
+        (setq taz_s_move_copy_created_ok nil)
+        (princ)
+      )
+
+      (if taz_s_move_copy_created_ok
+        (princ)
+        (progn
+          (setq taz_s_move_copy_beam_ok nil)
+          (princ (strcat "\nPominięto belkę (handle " taz_s_move_copy_old_handle "): taz_s_create_beam nie utworzył nowej bryły 3DSOLID, dane nie zostały zapisane."))
+          (setq taz_s_move_copy_count_errors (+ taz_s_move_copy_count_errors 1))
+        )
+      )
+
     )
     (princ)
   )
 
-  ;; sweep_p1
-  (if taz_s_move_copy_attr_p1
-    (progn
-      (setq taz_s_move_copy_attr_x (car taz_s_move_copy_attr_p1))
-      (setq taz_s_move_copy_attr_y (cadr taz_s_move_copy_attr_p1))
-      (setq taz_s_move_copy_attr_z (caddr taz_s_move_copy_attr_p1))
-      (setq taz_s_move_copy_attr_x_text (rtos taz_s_move_copy_attr_x 2 6))
-      (setq taz_s_move_copy_attr_y_text (rtos taz_s_move_copy_attr_y 2 6))
-      (setq taz_s_move_copy_attr_z_text (rtos taz_s_move_copy_attr_z 2 6))
-      (setq taz_s_move_copy_attr_line (strcat "   sweep_p1: (" taz_s_move_copy_attr_x_text ", " taz_s_move_copy_attr_y_text ", " taz_s_move_copy_attr_z_text ")\n"))
-      (setq taz_s_move_copy_attr_text (strcat taz_s_move_copy_attr_text taz_s_move_copy_attr_line))
-    )
-    (princ)
-  )
+  ;; --- atrybuty nowej bryły: pamięć, plik ---
 
-  ;; sweep_p2
-  (if taz_s_move_copy_attr_p2
+  (if taz_s_move_copy_beam_ok
     (progn
-      (setq taz_s_move_copy_attr_x (car taz_s_move_copy_attr_p2))
-      (setq taz_s_move_copy_attr_y (cadr taz_s_move_copy_attr_p2))
-      (setq taz_s_move_copy_attr_z (caddr taz_s_move_copy_attr_p2))
-      (setq taz_s_move_copy_attr_x_text (rtos taz_s_move_copy_attr_x 2 6))
-      (setq taz_s_move_copy_attr_y_text (rtos taz_s_move_copy_attr_y 2 6))
-      (setq taz_s_move_copy_attr_z_text (rtos taz_s_move_copy_attr_z 2 6))
-      (setq taz_s_move_copy_attr_line (strcat "   sweep_p2: (" taz_s_move_copy_attr_x_text ", " taz_s_move_copy_attr_y_text ", " taz_s_move_copy_attr_z_text ")\n"))
-      (setq taz_s_move_copy_attr_text (strcat taz_s_move_copy_attr_text taz_s_move_copy_attr_line))
-    )
-    (princ)
-  )
 
-  ;; linia z handle - tylko wtedy, gdy obiekt ma jakikolwiek atrybut
-  ;; (dopisana na początku, czyli tuż pod ename)
-  (if (/= taz_s_move_copy_attr_text "")
-    (progn
-      (setq taz_s_move_copy_attr_handle_line (strcat "   handle: " taz_s_move_copy_attr_handle "\n"))
-      (setq taz_s_move_copy_attr_text (strcat taz_s_move_copy_attr_handle_line taz_s_move_copy_attr_text))
+      ;; handle nowej bryły
+      (setq taz_s_move_copy_new_handle (cdr (assoc 5 (entget taz_s_move_copy_new_ename))))
+
+      ;; pamięć: atrybuty ze starej bryły na nową
+      (set (read (strcat "taz_s_" taz_s_move_copy_new_handle "_attr1")) taz_s_move_copy_old_attr1)
+      (set (read (strcat "taz_s_" taz_s_move_copy_new_handle "_attr2")) taz_s_move_copy_old_attr2)
+      (set (read (strcat "taz_s_" taz_s_move_copy_new_handle "_attr3")) taz_s_move_copy_old_attr3)
+      (set (read (strcat "taz_s_" taz_s_move_copy_new_handle "_attr4")) taz_s_move_copy_old_attr4)
+      (set (read (strcat "taz_s_" taz_s_move_copy_new_handle "_attr5")) taz_s_move_copy_old_attr5)
+      (set (read (strcat "taz_s_" taz_s_move_copy_new_handle "_attr6")) taz_s_move_copy_old_attr6)
+      (set (read (strcat "taz_s_" taz_s_move_copy_new_handle "_attr7")) taz_s_move_copy_old_attr7)
+      (set (read (strcat "taz_s_" taz_s_move_copy_new_handle "_attr8")) taz_s_move_copy_old_attr8)
+      (set (read (strcat "taz_s_" taz_s_move_copy_new_handle "_attr9")) taz_s_move_copy_old_attr9)
+      (set (read (strcat "taz_s_" taz_s_move_copy_new_handle "_attr10")) taz_s_move_copy_old_attr10)
+      (set (read (strcat "taz_s_" taz_s_move_copy_new_handle "_section_angle")) taz_s_move_copy_old_angle)
+      (set (read (strcat "taz_s_" taz_s_move_copy_new_handle "_section_position")) taz_s_move_copy_old_position)
+
+      ;; pamięć: nowe punkty ścieżki
+      (set (read (strcat "taz_s_" taz_s_move_copy_new_handle "_sweep_p1")) taz_s_move_copy_new_p1)
+      (set (read (strcat "taz_s_" taz_s_move_copy_new_handle "_sweep_p2")) taz_s_move_copy_new_p2)
+
+      ;; plik: dopisanie linii dla nowej bryły i przebudowa pliku
+      (taz_s_move_copy_write_beam_data)
+      (c:taz_s_rebuild_data)
+
+      (setq taz_s_move_copy_count_beams (+ taz_s_move_copy_count_beams 1))
+
     )
     (princ)
   )
@@ -295,87 +549,144 @@
 )
 
 ;; ---------------------------------------------------------
-;; ALERT Z PODSUMOWANIEM
-;; Wypisuje: ename zaznaczonych obiektów, tryb (Move / Copy)
-;; oraz wartości przesunięcia X, Y, Z pobrane z okna DCL.
-;; Pod ename obiektu, który ma atrybuty w pliku danych belek,
-;; dopisuje jego handle i atrybuty (patrz funkcja
-;; taz_s_move_copy_attributes_text).
+;; OBIEKT BEZ ATRYBUTÓW -> KOMENDA COPY
+;; Kopiuje obiekt z globalnej zmiennej taz_s_move_copy_run_ename
+;; o wektor X, Y, Z z okna DCL (od punktu 0,0,0 do punktu X,Y,Z).
+;; UCS = World ustawia taz_s_move_copy_run, a "_non" wyłącza osnapy.
 ;; ---------------------------------------------------------
 
-(defun taz_s_move_copy_show_alert ()
+(defun taz_s_move_copy_plain_copy ()
 
-  ;; liczba obiektów na liście
-  (setq taz_s_move_copy_alert_count (length taz_s_move_copy_ename_list))
-  (setq taz_s_move_copy_alert_count_text (itoa taz_s_move_copy_alert_count))
+  ;; ostatni obiekt w rysunku PRZED kopiowaniem
+  (setq taz_s_move_copy_last_before (entlast))
 
-  ;; tryb jako tekst
-  (if (= taz_s_move_copy_mode "1")
-    (setq taz_s_move_copy_alert_mode_text "MOVE (przesunięcie)")
-    (setq taz_s_move_copy_alert_mode_text "COPY (kopiowanie)")
+  ;; wektor przesunięcia
+  (setq taz_s_move_copy_copy_from (list 0.0 0.0 0.0))
+  (setq taz_s_move_copy_copy_to (list taz_s_move_copy_offset_x taz_s_move_copy_offset_y taz_s_move_copy_offset_z))
+
+  (command "_.COPY" taz_s_move_copy_run_ename "" "_non" taz_s_move_copy_copy_from "_non" taz_s_move_copy_copy_to)
+
+  ;; COPY może czekać na kolejny punkt (tryb wielokrotny) - kończymy ją
+  ;; Enterem, ale tylko wtedy, gdy komenda nadal jest aktywna.
+  ;; Licznik chroni przed pętlą nieskończoną.
+  (setq taz_s_move_copy_copy_guard 0)
+
+  (while (and (> (getvar "CMDACTIVE") 0) (< taz_s_move_copy_copy_guard 10))
+    (command "")
+    (setq taz_s_move_copy_copy_guard (+ taz_s_move_copy_copy_guard 1))
   )
 
-  ;; budowanie tekstu alertu - jeden krok = jeden fragment tekstu
-  (setq taz_s_move_copy_alert_text "")
+  ;; sprawdzenie: czy powstał nowy obiekt
+  (setq taz_s_move_copy_copy_new_ename (entlast))
 
-  (setq taz_s_move_copy_alert_text (strcat taz_s_move_copy_alert_text "Liczba zaznaczonych obiektów: "))
-  (setq taz_s_move_copy_alert_text (strcat taz_s_move_copy_alert_text taz_s_move_copy_alert_count_text))
-  (setq taz_s_move_copy_alert_text (strcat taz_s_move_copy_alert_text "\n\n"))
+  (if (equal taz_s_move_copy_copy_new_ename taz_s_move_copy_last_before)
+    (progn
+      (princ (strcat "\nNie skopiowano obiektu (handle " taz_s_move_copy_attr_handle ")."))
+      (setq taz_s_move_copy_count_errors (+ taz_s_move_copy_count_errors 1))
+    )
+    (setq taz_s_move_copy_count_copies (+ taz_s_move_copy_count_copies 1))
+  )
 
-  (setq taz_s_move_copy_alert_text (strcat taz_s_move_copy_alert_text "Ename zaznaczonych obiektów:\n"))
+  (princ)
 
-  ;; wczytanie pliku z danymi belek (jeżeli istnieje)
+)
+
+;; ---------------------------------------------------------
+;; PRZESUNIĘCIE / KOPIOWANIE ZAZNACZONYCH OBIEKTÓW
+;; Wywoływane po kliknięciu OK. Dla każdego obiektu z listy
+;; taz_s_move_copy_ename_list:
+;;   - obiekt z kompletem atrybutów (section_angle, section_position,
+;;     sweep_p1, sweep_p2) -> nowa bryła (taz_s_move_copy_new_beam),
+;;   - pozostałe obiekty -> komenda COPY (taz_s_move_copy_plain_copy).
+;; Na razie tryb Move / Copy z okna DCL nie ma wpływu na działanie.
+;; ---------------------------------------------------------
+
+(defun taz_s_move_copy_run ()
+
+  ;; --- wartości przesunięcia: tekst z okna DCL -> liczby ---
+
+  (setq taz_s_move_copy_comma_input taz_s_move_copy_x)
+  (taz_s_move_copy_replace_comma)
+  (setq taz_s_move_copy_offset_x (atof taz_s_move_copy_comma_output))
+
+  (setq taz_s_move_copy_comma_input taz_s_move_copy_y)
+  (taz_s_move_copy_replace_comma)
+  (setq taz_s_move_copy_offset_y (atof taz_s_move_copy_comma_output))
+
+  (setq taz_s_move_copy_comma_input taz_s_move_copy_z)
+  (taz_s_move_copy_replace_comma)
+  (setq taz_s_move_copy_offset_z (atof taz_s_move_copy_comma_output))
+
+  ;; --- plik z danymi belek: ścieżka i wczytanie (jeżeli istnieje) ---
   ;; Dzięki temu zmienne z atrybutami są w pamięci także dla belek
-  ;; utworzonych w tej sesji - taz_s_create_beam zapisuje je
-  ;; tylko do pliku, bez wczytywania.
-  (setq taz_s_move_copy_data_folder (taz_s_path))
-  (setq taz_s_move_copy_data_file (strcat taz_s_move_copy_data_folder "taz_s_beam_data.txt"))
+  ;; utworzonych w tej sesji. Zmienna taz_s_data_file ustawiana jest tak
+  ;; samo jak w skryptach edycji (korzysta z niej też taz_s_rebuild_data).
 
-  (if (findfile taz_s_move_copy_data_file)
-    (load taz_s_move_copy_data_file)
+  (setq taz_s_move_copy_data_folder (taz_s_path))
+  (setq taz_s_data_file (strcat taz_s_move_copy_data_folder "taz_s_beam_data.txt"))
+
+  (if (findfile taz_s_data_file)
+    (load taz_s_data_file)
     (princ)
   )
 
-  ;; ename każdego obiektu - każdy w osobnej linii
-  ;; vl-princ-to-string to jedyna funkcja VL w tym skrypcie:
-  ;; alert przyjmuje tylko tekst, a zwykłe funkcje AutoLISP
-  ;; nie potrafią zamienić ename na tekst.
-  (setq taz_s_move_copy_alert_index 0)
+  ;; --- przygotowanie (tak jak w skryptach edycji) ---
+  ;; zapis ustawień, odblokowanie warstw (COPY nie działa na zablokowanych
+  ;; warstwach), warstwa edycji jako aktualna, UCS = World
 
-  (while (< taz_s_move_copy_alert_index taz_s_move_copy_alert_count)
-    (setq taz_s_move_copy_alert_ename (nth taz_s_move_copy_alert_index taz_s_move_copy_ename_list))
-    (setq taz_s_move_copy_alert_ename_text (vl-princ-to-string taz_s_move_copy_alert_ename))
-    (setq taz_s_move_copy_alert_text (strcat taz_s_move_copy_alert_text taz_s_move_copy_alert_ename_text))
-    (setq taz_s_move_copy_alert_text (strcat taz_s_move_copy_alert_text "\n"))
+  (taz_s_current_settings_save)
+  (taz_s_unlock_all_layers)
+  (command "_LAYER" "_S" "taz_s_editing_layer" "")
+  (command "_.UCS" "_W")
 
-    ;; atrybuty tego obiektu (jeżeli je ma) - dopisane pod ename
-    (taz_s_move_copy_attributes_text)
-    (setq taz_s_move_copy_alert_text (strcat taz_s_move_copy_alert_text taz_s_move_copy_attr_text))
+  ;; --- pętla po zaznaczonych obiektach ---
 
-    (setq taz_s_move_copy_alert_index (+ taz_s_move_copy_alert_index 1))
+  (setq taz_s_move_copy_count_beams 0)
+  (setq taz_s_move_copy_count_copies 0)
+  (setq taz_s_move_copy_count_errors 0)
+
+  (setq taz_s_move_copy_run_index 0)
+
+  (while (< taz_s_move_copy_run_index (length taz_s_move_copy_ename_list))
+
+    (setq taz_s_move_copy_run_ename (nth taz_s_move_copy_run_index taz_s_move_copy_ename_list))
+
+    ;; handle i atrybuty obiektu
+    (taz_s_move_copy_read_attributes)
+
+    ;; obiekt z atrybutami = istnieją wszystkie cztery
+    (setq taz_s_move_copy_is_beam T)
+    (if (null taz_s_move_copy_attr_angle) (setq taz_s_move_copy_is_beam nil) (princ))
+    (if (null taz_s_move_copy_attr_position) (setq taz_s_move_copy_is_beam nil) (princ))
+    (if (null taz_s_move_copy_attr_p1) (setq taz_s_move_copy_is_beam nil) (princ))
+    (if (null taz_s_move_copy_attr_p2) (setq taz_s_move_copy_is_beam nil) (princ))
+
+    (if taz_s_move_copy_is_beam
+      (taz_s_move_copy_new_beam)
+      (taz_s_move_copy_plain_copy)
+    )
+
+    (setq taz_s_move_copy_run_index (+ taz_s_move_copy_run_index 1))
+
   )
 
-  ;; tryb
-  (setq taz_s_move_copy_alert_text (strcat taz_s_move_copy_alert_text "\nTryb: "))
-  (setq taz_s_move_copy_alert_text (strcat taz_s_move_copy_alert_text taz_s_move_copy_alert_mode_text))
-  (setq taz_s_move_copy_alert_text (strcat taz_s_move_copy_alert_text "\n\n"))
+  ;; --- sprzątanie (tak jak w skryptach edycji) ---
+  ;; zablokowanie warstw i przywrócenie ustawień
 
-  ;; wartości przesunięcia
-  (setq taz_s_move_copy_alert_text (strcat taz_s_move_copy_alert_text "Wartości przesunięcia:\n"))
+  (taz_s_lock_all_layers)
+  (taz_s_current_settings_restore)
 
-  (setq taz_s_move_copy_alert_text (strcat taz_s_move_copy_alert_text "X = "))
-  (setq taz_s_move_copy_alert_text (strcat taz_s_move_copy_alert_text taz_s_move_copy_x))
-  (setq taz_s_move_copy_alert_text (strcat taz_s_move_copy_alert_text "\n"))
+  ;; --- podsumowanie w wierszu poleceń ---
 
-  (setq taz_s_move_copy_alert_text (strcat taz_s_move_copy_alert_text "Y = "))
-  (setq taz_s_move_copy_alert_text (strcat taz_s_move_copy_alert_text taz_s_move_copy_y))
-  (setq taz_s_move_copy_alert_text (strcat taz_s_move_copy_alert_text "\n"))
+  (setq taz_s_move_copy_summary "\nGotowe. Utworzone belki: ")
+  (setq taz_s_move_copy_summary (strcat taz_s_move_copy_summary (itoa taz_s_move_copy_count_beams)))
+  (setq taz_s_move_copy_summary (strcat taz_s_move_copy_summary ", skopiowane obiekty: "))
+  (setq taz_s_move_copy_summary (strcat taz_s_move_copy_summary (itoa taz_s_move_copy_count_copies)))
+  (setq taz_s_move_copy_summary (strcat taz_s_move_copy_summary ", pominięte: "))
+  (setq taz_s_move_copy_summary (strcat taz_s_move_copy_summary (itoa taz_s_move_copy_count_errors)))
+  (setq taz_s_move_copy_summary (strcat taz_s_move_copy_summary "."))
 
-  (setq taz_s_move_copy_alert_text (strcat taz_s_move_copy_alert_text "Z = "))
-  (setq taz_s_move_copy_alert_text (strcat taz_s_move_copy_alert_text taz_s_move_copy_z))
-
-  ;; wyświetlenie alertu
-  (alert taz_s_move_copy_alert_text)
+  (princ taz_s_move_copy_summary)
 
   (princ)
 
