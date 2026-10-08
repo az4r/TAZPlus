@@ -21,8 +21,8 @@
 ;;                - obiekt bez atrybutów: komenda COPY o wektor X, Y, Z.
 ;;      Anuluj -> przerwanie działania skryptu
 ;;
-;; Na razie Move i Copy działają tak samo: stare obiekty zostają
-;; nietknięte, powstają tylko nowe.
+;; Move: po utworzeniu nowego obiektu (nowa bryła albo kopia) obiekt
+;; bazowy jest usuwany. Copy: obiekty bazowe zostają nietknięte.
 ;; =========================================================
 
 (defun c:taz_s_move_copy ()
@@ -377,6 +377,42 @@
 )
 
 ;; ---------------------------------------------------------
+;; USUNIĘCIE OBIEKTU BAZOWEGO (tylko tryb Move)
+;; Usuwa obiekt z globalnej zmiennej taz_s_move_copy_run_ename,
+;; czyli ten, z którego powstała nowa bryła albo kopia.
+;; Wywoływane dopiero wtedy, gdy nowy obiekt już istnieje.
+;; Najpierw sprawdza, czy obiekt jeszcze istnieje (entdel na już
+;; usuniętym obiekcie PRZYWRÓCIŁBY go), potem usuwa i kontroluje
+;; wynik. Warstwy są odblokowane przez taz_s_move_copy_run.
+;; ---------------------------------------------------------
+
+(defun taz_s_move_copy_delete_base ()
+
+  ;; czy obiekt bazowy jeszcze istnieje
+  (setq taz_s_move_copy_delete_data (entget taz_s_move_copy_run_ename))
+
+  (if taz_s_move_copy_delete_data
+    (progn
+
+      (entdel taz_s_move_copy_run_ename)
+
+      ;; kontrola: po usunięciu entget nie powinien już nic zwracać
+      (setq taz_s_move_copy_delete_check (entget taz_s_move_copy_run_ename))
+
+      (if taz_s_move_copy_delete_check
+        (princ (strcat "\nNie usunięto obiektu bazowego (handle " taz_s_move_copy_attr_handle ")."))
+        (setq taz_s_move_copy_count_deleted (+ taz_s_move_copy_count_deleted 1))
+      )
+
+    )
+    (princ)
+  )
+
+  (princ)
+
+)
+
+;; ---------------------------------------------------------
 ;; OBIEKT Z ATRYBUTAMI -> NOWA BRYŁA
 ;; Dla obiektu z globalnej zmiennej taz_s_move_copy_run_ename
 ;; (atrybuty już odczytane przez taz_s_move_copy_read_attributes):
@@ -387,7 +423,9 @@
 ;;      taz_s_edit_new_path_p1 i taz_s_edit_new_path_p2),
 ;;   4. przenosi atrybuty ze starej bryły na nową - w pamięci
 ;;      i w pliku taz_s_beam_data.txt.
-;; Stara bryła zostaje nietknięta.
+;; Tryb Move: stara bryła jest usuwana PRZED zapisem pliku, tak jak
+;; w skryptach edycji (dzięki temu rebuild jest tuż po zamknięciu
+;; pliku). Tryb Copy: stara bryła zostaje.
 ;; ---------------------------------------------------------
 
 (defun taz_s_move_copy_new_beam ()
@@ -534,6 +572,13 @@
       (set (read (strcat "taz_s_" taz_s_move_copy_new_handle "_sweep_p1")) taz_s_move_copy_new_p1)
       (set (read (strcat "taz_s_" taz_s_move_copy_new_handle "_sweep_p2")) taz_s_move_copy_new_p2)
 
+      ;; tryb Move: usunięcie starej bryły - tak jak w skryptach edycji
+      ;; PRZED zapisem pliku (dane starej bryły są już w zmiennych old)
+      (if taz_s_move_copy_is_move
+        (taz_s_move_copy_delete_base)
+        (princ)
+      )
+
       ;; plik: dopisanie linii dla nowej bryły i przebudowa pliku
       (taz_s_move_copy_write_beam_data)
       (c:taz_s_rebuild_data)
@@ -587,6 +632,15 @@
     (setq taz_s_move_copy_count_copies (+ taz_s_move_copy_count_copies 1))
   )
 
+  ;; tryb Move: jeżeli kopia powstała, usuwamy obiekt bazowy
+  (if taz_s_move_copy_is_move
+    (if (equal taz_s_move_copy_copy_new_ename taz_s_move_copy_last_before)
+      (princ)
+      (taz_s_move_copy_delete_base)
+    )
+    (princ)
+  )
+
   (princ)
 
 )
@@ -598,7 +652,8 @@
 ;;   - obiekt z kompletem atrybutów (section_angle, section_position,
 ;;     sweep_p1, sweep_p2) -> nowa bryła (taz_s_move_copy_new_beam),
 ;;   - pozostałe obiekty -> komenda COPY (taz_s_move_copy_plain_copy).
-;; Na razie tryb Move / Copy z okna DCL nie ma wpływu na działanie.
+;; Tryb Move (radio w oknie DCL): po utworzeniu nowego obiektu obiekt
+;; bazowy jest usuwany. Tryb Copy: obiekty bazowe zostają.
 ;; ---------------------------------------------------------
 
 (defun taz_s_move_copy_run ()
@@ -644,6 +699,14 @@
   (setq taz_s_move_copy_count_beams 0)
   (setq taz_s_move_copy_count_copies 0)
   (setq taz_s_move_copy_count_errors 0)
+  (setq taz_s_move_copy_count_deleted 0)
+
+  ;; tryb Move ("1" z radio w oknie DCL): obiekty bazowe są usuwane
+  (setq taz_s_move_copy_is_move nil)
+  (if (= taz_s_move_copy_mode "1")
+    (setq taz_s_move_copy_is_move T)
+    (princ)
+  )
 
   (setq taz_s_move_copy_run_index 0)
 
@@ -684,6 +747,8 @@
   (setq taz_s_move_copy_summary (strcat taz_s_move_copy_summary (itoa taz_s_move_copy_count_copies)))
   (setq taz_s_move_copy_summary (strcat taz_s_move_copy_summary ", pominięte: "))
   (setq taz_s_move_copy_summary (strcat taz_s_move_copy_summary (itoa taz_s_move_copy_count_errors)))
+  (setq taz_s_move_copy_summary (strcat taz_s_move_copy_summary ", usunięte obiekty bazowe: "))
+  (setq taz_s_move_copy_summary (strcat taz_s_move_copy_summary (itoa taz_s_move_copy_count_deleted)))
   (setq taz_s_move_copy_summary (strcat taz_s_move_copy_summary "."))
 
   (princ taz_s_move_copy_summary)
