@@ -236,10 +236,10 @@
   ;; zdarzenie pustym getpoint przed właściwym pobraniem punktów.
   ;; -----------------------------------------------------------
 
-  (if (= taz_s_move_copy_pick_counter 2)
-    (getpoint)
-    (princ)
-  )
+  ;;(if (= taz_s_move_copy_pick_counter 2)
+    ;;(getpoint)
+    ;;(princ)
+  ;;)
 
   (setq taz_s_move_copy_pick_p1 (getpoint "\nPodaj pierwszy punkt wektora przesunięcia: "))
 
