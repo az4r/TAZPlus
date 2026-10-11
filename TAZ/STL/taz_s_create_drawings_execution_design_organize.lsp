@@ -4240,7 +4240,7 @@
 ;;   2. taz_s_create_steel_table (korzysta z taz_s_visible_handles)
 ;;
 ;; Dane profilu/dlugosci/materialu pobierane sa z globalnych zmiennych
-;; wczytanych z taz_s_beam_data.txt (musza byc juz zaladowane - load w skrypcie
+;; wczytanych z taz_s_objects_data.txt (musza byc juz zaladowane - load w skrypcie
 ;; glownym, tak jak dotychczas).
 ;;
 ;; Pole powierzchni przekroju (kolumna "Powierzchnia") pobierane jest przez
@@ -4348,7 +4348,7 @@
 )
 
 ;; ---------------------------------------------------------------------
-;; POMOCNICZE: odczyt danych elementu po handlu (z taz_s_beam_data.txt)
+;; POMOCNICZE: odczyt danych elementu po handlu (z taz_s_objects_data.txt)
 ;; ---------------------------------------------------------------------
 
 (defun taz_s_st_get_profile_text (taz_s_st_h)

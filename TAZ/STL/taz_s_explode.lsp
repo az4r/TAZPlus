@@ -26,7 +26,7 @@
 ;; Dane sa usuwane:
 ;;
 ;;   1. z biezacej sesji AutoLISP
-;;   2. z pliku taz_s_beam_data.txt
+;;   2. z pliku taz_s_objects_data.txt
 ;;
 ;; Sam obiekt pozostaje bez zmian.
 ;;
@@ -130,7 +130,7 @@
           (setq taz_s_explode_data_file
                 (strcat
                   (taz_s_path)
-                  "taz_s_beam_data.txt"
+                  "taz_s_objects_data.txt"
                 )
           )
 

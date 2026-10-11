@@ -23,7 +23,7 @@
 ;; - zmienia wlasciwosci obiektow,
 ;; - usuwa danych osi,
 ;; - usuwa danych parametrów projektu,
-;; - modyfikuje taz_s_beam_data.txt.
+;; - modyfikuje taz_s_objects_data.txt.
 ;;
 ;; Plik _EXPLODED nie otrzymuje osobnego pliku danych.
 ;;

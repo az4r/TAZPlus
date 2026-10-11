@@ -36,7 +36,7 @@
   ;; ---------------------------------------------------------
 
   (setq taz_s_dwg_path (getvar "DWGPREFIX"))
-  (setq taz_s_data_file (strcat taz_s_dwg_path (substr (getvar "DWGNAME") 1 (- (strlen (getvar "DWGNAME")) 4)) "/" "taz_s_beam_data.txt"))
+  (setq taz_s_data_file (strcat taz_s_dwg_path (substr (getvar "DWGNAME") 1 (- (strlen (getvar "DWGNAME")) 4)) "/" "taz_s_objects_data.txt"))
 
   ;; ---------------------------------------------------------
   ;; WCZYTANIE DANYCH Z PLIKU TXT DO ZMIENNYCH GLOBALNYCH

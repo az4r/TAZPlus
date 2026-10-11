@@ -3,7 +3,7 @@
 ;;
 ;; Co robi:
 ;;  1. Pobiera zaznaczony obiekt (bryla 3D) i jego uchwyt (handle)
-;;  2. Wczytuje plik taz_s_data_file (taz_s_beam_data.txt)
+;;  2. Wczytuje plik taz_s_data_file (taz_s_objects_data.txt)
 ;;  3. Czyta plik linia po linii i pomija linie dotyczace
 ;;     zaznaczonej bryly (rozpoznawane po handle w nazwie zmiennej)
 ;;  4. Zapisuje plik ponownie - juz bez wpisow usuwanej bryly
@@ -26,7 +26,7 @@
   ;; ---------------------------------------------------------
 
   (setq taz_s_data_file
-    (strcat (taz_s_path) "taz_s_beam_data.txt"))
+    (strcat (taz_s_path) "taz_s_objects_data.txt"))
 
   ;; ---------------------------------------------------------
   ;; POBIERZ ZAZNACZENIE

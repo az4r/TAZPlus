@@ -14,12 +14,12 @@
 ;;          trafia do pól X, Y, Z; potem okno otwiera się ponownie
 ;;        - przyciski OK i Anuluj
 ;;   4. OK     -> dla każdego zaznaczonego obiektu:
-;;                - obiekt z atrybutami w pliku taz_s_beam_data.txt
+;;                - obiekt z atrybutami w pliku taz_s_objects_data.txt
 ;;                  (section_angle, section_position, sweep_p1, sweep_p2):
 ;;                  do sweep_p1 i sweep_p2 dodawane są X, Y, Z z okna DCL,
 ;;                  z nowych punktów taz_s_create_beam tworzy nową bryłę,
 ;;                  a atrybuty starej bryły są przenoszone na nową
-;;                  (w pamięci i w pliku taz_s_beam_data.txt),
+;;                  (w pamięci i w pliku taz_s_objects_data.txt),
 ;;                - obiekt bez atrybutów: komenda COPY o wektor X, Y, Z.
 ;;      Anuluj -> przerwanie działania skryptu
 ;;
@@ -304,7 +304,7 @@
 ;; ODCZYT HANDLE I ATRYBUTÓW OBIEKTU
 ;; Dla obiektu z globalnej zmiennej taz_s_move_copy_run_ename:
 ;;   1. pobiera handle obiektu (kod DXF 5) - z niego zbudowane
-;;      są nazwy zmiennych w pliku taz_s_beam_data.txt,
+;;      są nazwy zmiennych w pliku taz_s_objects_data.txt,
 ;;   2. odczytuje zmienne:
 ;;        taz_s_<handle>_section_angle    -> taz_s_move_copy_attr_angle
 ;;        taz_s_<handle>_section_position -> taz_s_move_copy_attr_position
@@ -508,7 +508,7 @@
 ;;      ścieżki (nowe punkty przekazywane zmiennymi
 ;;      taz_s_edit_new_path_p1 i taz_s_edit_new_path_p2),
 ;;   4. przenosi atrybuty ze starej bryły na nową - w pamięci
-;;      i w pliku taz_s_beam_data.txt.
+;;      i w pliku taz_s_objects_data.txt.
 ;; Tryb Move: stara bryła jest usuwana PRZED zapisem pliku, tak jak
 ;; w skryptach edycji (dzięki temu rebuild jest tuż po zamknięciu
 ;; pliku). Tryb Copy: stara bryła zostaje.
@@ -984,7 +984,7 @@
   ;; samo jak w skryptach edycji (korzysta z niej też taz_s_rebuild_data).
 
   (setq taz_s_move_copy_data_folder (taz_s_path))
-  (setq taz_s_data_file (strcat taz_s_move_copy_data_folder "taz_s_beam_data.txt"))
+  (setq taz_s_data_file (strcat taz_s_move_copy_data_folder "taz_s_objects_data.txt"))
 
   (if (findfile taz_s_data_file)
     (load taz_s_data_file)

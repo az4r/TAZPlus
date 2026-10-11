@@ -201,7 +201,7 @@
   ;; ---------------------------------------------------------
 
   (setq taz_s_data_file
-    (strcat (taz_s_path) "taz_s_beam_data.txt"))
+    (strcat (taz_s_path) "taz_s_objects_data.txt"))
 
   (load taz_s_data_file)
 
