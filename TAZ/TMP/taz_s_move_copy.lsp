@@ -672,6 +672,36 @@
   (taz_s_move_copy_replace_comma)
   (setq taz_s_move_copy_offset_z (atof taz_s_move_copy_comma_output))
 
+  ;; --- wartości przesunięcia: UCS użytkownika -> WCS ---
+  ;; Liczby X, Y, Z z okna DCL są podane w UCS, który był aktywny tuż przed
+  ;; uruchomieniem skryptu. Dalsza część skryptu pracuje w UCS = World
+  ;; (komenda UCS World niżej), więc wektor przesunięcia przeliczamy na WCS
+  ;; teraz, dopóki aktywny jest jeszcze UCS użytkownika. Funkcja trans liczy
+  ;; zawsze względem UCS aktywnego w chwili wywołania.
+  ;; Dla wektora liczy się tylko obrót osi UCS, a nie położenie jego początku,
+  ;; dlatego od przeliczonego punktu (X,Y,Z) odejmujemy przeliczony punkt (0,0,0).
+  ;; Wynik wraca do zmiennych taz_s_move_copy_offset_x/y/z, dzięki czemu
+  ;; taz_s_move_copy_new_beam i taz_s_move_copy_plain_copy nie wymagają zmian.
+  ;; Dla UCS = World wynik jest identyczny jak przed przeliczeniem.
+
+  ;; liczby wpisane w oknie DCL (w UCS użytkownika)
+  (setq taz_s_move_copy_ucs_x taz_s_move_copy_offset_x)
+  (setq taz_s_move_copy_ucs_y taz_s_move_copy_offset_y)
+  (setq taz_s_move_copy_ucs_z taz_s_move_copy_offset_z)
+
+  ;; punkt (X Y Z) oraz początek (0 0 0), oba w UCS użytkownika
+  (setq taz_s_move_copy_ucs_point (list taz_s_move_copy_ucs_x taz_s_move_copy_ucs_y taz_s_move_copy_ucs_z))
+  (setq taz_s_move_copy_ucs_origin (list 0.0 0.0 0.0))
+
+  ;; oba punkty z UCS użytkownika (kod 1) na WCS (kod 0)
+  (setq taz_s_move_copy_wcs_point (trans taz_s_move_copy_ucs_point 1 0))
+  (setq taz_s_move_copy_wcs_origin (trans taz_s_move_copy_ucs_origin 1 0))
+
+  ;; wektor przesunięcia w WCS = różnica przeliczonych punktów
+  (setq taz_s_move_copy_offset_x (- (car taz_s_move_copy_wcs_point) (car taz_s_move_copy_wcs_origin)))
+  (setq taz_s_move_copy_offset_y (- (cadr taz_s_move_copy_wcs_point) (cadr taz_s_move_copy_wcs_origin)))
+  (setq taz_s_move_copy_offset_z (- (caddr taz_s_move_copy_wcs_point) (caddr taz_s_move_copy_wcs_origin)))
+
   ;; --- plik z danymi belek: ścieżka i wczytanie (jeżeli istnieje) ---
   ;; Dzięki temu zmienne z atrybutami są w pamięci także dla belek
   ;; utworzonych w tej sesji. Zmienna taz_s_data_file ustawiana jest tak
