@@ -1,6 +1,7 @@
 (defun taz_start()
   (load "C:\\TAZ\\GEN\\taz_g_start.lsp")
   (load "C:\\TAZ\\STL\\taz_s_annotation_scale.lsp")
+  (load "C:\\TAZ\\STL\\taz_s_add_attributes.lsp")
   (load "C:\\TAZ\\STL\\taz_s_axes.dcl")
   (load "C:\\TAZ\\STL\\taz_s_axes.lsp")
   (load "C:\\TAZ\\STL\\taz_s_change_profile.lsp")
