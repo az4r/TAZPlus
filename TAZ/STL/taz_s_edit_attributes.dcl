@@ -30,12 +30,12 @@ taz_s_edit_attributes_dialog : dialog {
 
     : row {
       : text { label = "RODZINA PROFILU:"; width = 40; fixed_width = true; }
-      : edit_box { key = "taz_s_attr6"; edit_width = 25; is_enabled = false; }
+      : edit_box { key = "taz_s_attr6"; edit_width = 25; }
     }
 
     : row {
       : text { label = "TYP PROFILU:"; width = 40; fixed_width = true; }
-      : edit_box { key = "taz_s_attr7"; edit_width = 25; is_enabled = false; }
+      : edit_box { key = "taz_s_attr7"; edit_width = 25; }
     }
 
     : row {
