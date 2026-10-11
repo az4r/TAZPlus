@@ -1562,7 +1562,11 @@
       (list
         (cons -4 "<AND")
         (cons 67 0)
+        (cons -4 "<OR")
         (cons 0 "3DSOLID")
+        (cons 8 "taz_s_beam")
+        (cons 8 "taz_s_plate")
+        (cons -4 "OR>")
         (cons -4 "<NOT") (cons 8 "taz_s_axes")               (cons -4 "NOT>")
         (cons -4 "<NOT") (cons 8 "taz_s_execution_design")   (cons -4 "NOT>")
         (cons -4 "<NOT") (cons 8 "taz_s_editing_layer")      (cons -4 "NOT>")
@@ -2354,14 +2358,9 @@
     (setq taz_s_izo_orig_type (cdr (assoc 0 taz_s_izo_orig_data)))
     (setq taz_s_izo_orig_layer (cdr (assoc 8 taz_s_izo_orig_data)))
 
-    (if
-      (and
-        (= taz_s_izo_orig_type "3DSOLID")
-        (taz_s_is_data_layer taz_s_izo_orig_layer)
-      )
+    (if (taz_s_is_data_layer taz_s_izo_orig_layer)
       (progn
         (setq taz_s_izo_orig_h (cdr (assoc 5 taz_s_izo_orig_data)))
-
         (setq taz_s_visible_handles
           (append taz_s_visible_handles (list taz_s_izo_orig_h))
         )
