@@ -1,0 +1,872 @@
+import FreeCAD as App
+import FreeCADGui as Gui
+import Part
+import os
+
+try:
+    from PySide6 import QtWidgets
+except:
+    from PySide import QtWidgets
+
+
+# ============================================================
+# USTAWIENIA
+# ============================================================
+
+OUTPUT_FILE = os.path.join(
+    os.path.expanduser("~"),
+    "Desktop",
+    "SOLIDS.ifc"
+)
+
+# Tolerancja dla sewShape()
+SEW_TOL = 0.001
+
+# Tolerancja grupowania punktów przy rekonstrukcji
+# pętli granicznej
+POINT_TOL = 1e-7
+
+
+# ============================================================
+# KOMUNIKATY
+# ============================================================
+
+def info(title, text):
+    QtWidgets.QMessageBox.information(
+        Gui.getMainWindow(),
+        title,
+        text
+    )
+
+
+def warning(title, text):
+    QtWidgets.QMessageBox.warning(
+        Gui.getMainWindow(),
+        title,
+        text
+    )
+
+
+def error(title, text):
+    QtWidgets.QMessageBox.critical(
+        Gui.getMainWindow(),
+        title,
+        text
+    )
+
+
+# ============================================================
+# ZNALEZIENIE GEOMETRII Z IMPORTU IFC
+# ============================================================
+
+def get_source_object(doc):
+
+    shape_objects = []
+
+    for obj in doc.Objects:
+
+        try:
+            shape = obj.Shape
+
+            if shape.isNull():
+                continue
+
+            if len(shape.Faces) == 0:
+                continue
+
+            shape_objects.append(obj)
+
+        except:
+            pass
+
+    if len(shape_objects) == 0:
+        return None
+
+    if len(shape_objects) > 1:
+        raise RuntimeError(
+            "Znaleziono więcej niż jeden obiekt zawierający geometrię.\n"
+            "Makro oczekuje jednego obiektu z geometrią po imporcie IFC."
+        )
+
+    return shape_objects[0]
+
+
+# ============================================================
+# KRAWĘDZIE GRANICZNE OTWARTEGO SHELLA
+# ============================================================
+
+def get_boundary_edges(shell):
+
+    counts = {}
+
+    for face in shell.Faces:
+
+        for edge in face.Edges:
+
+            h = edge.hashCode()
+            counts[h] = counts.get(h, 0) + 1
+
+    boundary = []
+
+    for edge in shell.Edges:
+
+        if counts.get(edge.hashCode(), 0) == 1:
+            boundary.append(edge)
+
+    return boundary
+
+
+# ============================================================
+# KLUCZ PUNKTU
+# ============================================================
+
+def point_key(point):
+
+    return (
+        int(round(point.x / POINT_TOL)),
+        int(round(point.y / POINT_TOL)),
+        int(round(point.z / POINT_TOL))
+    )
+
+
+# ============================================================
+# ODTWORZENIE PĘTLI Z OTWARTYCH KRAWĘDZI
+# ============================================================
+
+def build_loops(edges):
+
+    points = {}
+    graph = {}
+
+    for edge in edges:
+
+        if len(edge.Vertexes) != 2:
+
+            raise RuntimeError(
+                "Jedna z krawędzi granicznych nie ma dokładnie "
+                "dwóch wierzchołków."
+            )
+
+        p1 = edge.Vertexes[0].Point
+        p2 = edge.Vertexes[1].Point
+
+        k1 = point_key(p1)
+        k2 = point_key(p2)
+
+        points.setdefault(k1, p1)
+        points.setdefault(k2, p2)
+
+        graph.setdefault(k1, []).append(k2)
+        graph.setdefault(k2, []).append(k1)
+
+    # --------------------------------------------------------
+    # Znajdź spójne komponenty
+    # --------------------------------------------------------
+
+    unseen = set(graph.keys())
+    components = []
+
+    while unseen:
+
+        start = next(iter(unseen))
+
+        stack = [start]
+        component = set()
+
+        while stack:
+
+            node = stack.pop()
+
+            if node in component:
+                continue
+
+            component.add(node)
+            unseen.discard(node)
+
+            for neighbour in graph[node]:
+
+                if neighbour not in component:
+                    stack.append(neighbour)
+
+        components.append(component)
+
+    loops = []
+
+    # --------------------------------------------------------
+    # Każdy komponent powinien tworzyć zamkniętą pętlę
+    # --------------------------------------------------------
+
+    for component in components:
+
+        for node in component:
+
+            degree = len(graph[node])
+
+            if degree != 2:
+
+                raise RuntimeError(
+                    "Granica otwartego shella nie tworzy "
+                    "zamkniętej pętli.\n"
+                    "Wierzchołek ma stopień %d zamiast 2."
+                    % degree
+                )
+
+        start = next(iter(component))
+
+        ordered_keys = []
+
+        previous = None
+        current = start
+
+        while True:
+
+            ordered_keys.append(current)
+
+            neighbours = graph[current]
+
+            if neighbours[0] != previous:
+                next_node = neighbours[0]
+            else:
+                next_node = neighbours[1]
+
+            previous = current
+            current = next_node
+
+            if current == start:
+                break
+
+            if len(ordered_keys) > len(component):
+
+                raise RuntimeError(
+                    "Nie udało się poprawnie przejść "
+                    "pętli granicznej."
+                )
+
+        loops.append(
+            [points[k] for k in ordered_keys]
+        )
+
+    return loops
+
+
+# ============================================================
+# UTWORZENIE ŁATY
+# ============================================================
+
+def create_patch(points):
+
+    if len(points) < 3:
+
+        raise RuntimeError(
+            "Pętla graniczna ma mniej niż 3 punkty."
+        )
+
+    wire = Part.makePolygon(
+        points + [points[0]]
+    )
+
+    if not wire.isClosed():
+
+        raise RuntimeError(
+            "Nie udało się utworzyć zamkniętej pętli."
+        )
+
+    if not wire.isValid():
+
+        raise RuntimeError(
+            "Utworzona pętla jest niepoprawna."
+        )
+
+    face = Part.Face(wire)
+
+    if not face.isValid():
+
+        raise RuntimeError(
+            "Nie udało się utworzyć poprawnej "
+            "powierzchni łaty."
+        )
+
+    return face
+
+
+# ============================================================
+# NAPRAWA OTWARTEGO SHELLA PRZEZ SEWING
+# ============================================================
+
+def try_sew_shell(shell):
+
+    repaired = shell.copy()
+
+    try:
+
+        repaired.sewShape(SEW_TOL)
+
+    except Exception:
+
+        return None
+
+    if (
+        len(repaired.Shells) == 1
+        and repaired.isClosed()
+        and repaired.isValid()
+    ):
+
+        return repaired.Shells[0]
+
+    return None
+
+
+# ============================================================
+# OTWARTY SHELL -> PATCH
+# ============================================================
+
+def repair_open_shell(shell, shell_index):
+
+    boundary = get_boundary_edges(shell)
+
+    if len(boundary) == 0:
+
+        raise RuntimeError(
+            "Shell %d jest otwarty, ale nie znaleziono "
+            "krawędzi granicznych."
+            % shell_index
+        )
+
+    print(
+        "  -> sewShape nie zamknął Shell %d"
+        % shell_index
+    )
+
+    print(
+        "  -> krawędzi granicznych: %d"
+        % len(boundary)
+    )
+
+    loops = build_loops(boundary)
+
+    # --------------------------------------------------------
+    # Oczekujemy jednej brakującej powierzchni.
+    # --------------------------------------------------------
+
+    if len(loops) != 1:
+
+        raise RuntimeError(
+            "Shell %d ma %d oddzielne pętle graniczne.\n"
+            "Makro nie będzie automatycznie wypełniać "
+            "wielu pętli, ponieważ mogłoby to zmienić "
+            "geometrię."
+            % (shell_index, len(loops))
+        )
+
+    patch = create_patch(loops[0])
+
+    faces = list(shell.Faces)
+    faces.append(patch)
+
+    repaired = Part.makeShell(faces)
+
+    if len(repaired.Shells) != 1:
+
+        raise RuntimeError(
+            "Po dodaniu łaty powstało więcej niż jeden Shell."
+        )
+
+    repaired_shell = repaired.Shells[0]
+
+    if not repaired_shell.isClosed():
+
+        raise RuntimeError(
+            "Po dodaniu łaty Shell nadal jest otwarty."
+        )
+
+    if not repaired_shell.isValid():
+
+        raise RuntimeError(
+            "Naprawiony Shell jest niepoprawny."
+        )
+
+    return repaired_shell
+
+
+# ============================================================
+# SHELL -> SOLID
+# ============================================================
+
+def shell_to_solid(shell, shell_index):
+
+    # --------------------------------------------------------
+    # Jeżeli Shell jest otwarty:
+    #
+    # 1. Najpierw próbujemy sewShape().
+    # 2. Jeżeli to nie wystarczy, robimy patch.
+    # --------------------------------------------------------
+
+    if shell.isClosed():
+
+        final_shell = shell
+
+    else:
+
+        print(
+            "  -> Shell %d jest otwarty."
+            % shell_index
+        )
+
+        sewn = try_sew_shell(shell)
+
+        if sewn is not None:
+
+            print(
+                "  -> sewShape(%.3f) zamknął Shell."
+                % SEW_TOL
+            )
+
+            final_shell = sewn
+
+        else:
+
+            print(
+                "  -> sewShape nie wystarczył."
+            )
+
+            final_shell = repair_open_shell(
+                shell,
+                shell_index
+            )
+
+    # --------------------------------------------------------
+    # Shell -> Solid
+    # --------------------------------------------------------
+
+    solid = Part.makeSolid(final_shell)
+
+    if solid.ShapeType != "Solid":
+
+        raise RuntimeError(
+            "Shell %d nie został zamieniony na Solid."
+            % shell_index
+        )
+
+    if len(solid.Solids) != 1:
+
+        raise RuntimeError(
+            "Shell %d utworzył więcej niż jedną bryłę."
+            % shell_index
+        )
+
+    # --------------------------------------------------------
+    # Korekta orientacji tylko przy ujemnej objętości
+    # --------------------------------------------------------
+
+    if solid.Volume < 0:
+
+        print(
+            "  -> ujemna objętość: odwracanie orientacji."
+        )
+
+        reversed_shell = final_shell.copy()
+        reversed_shell.reverse()
+
+        solid = Part.makeSolid(
+            reversed_shell
+        )
+
+    print(
+        "  -> Solid | valid=%s | volume=%.3f"
+        % (
+            solid.isValid(),
+            solid.Volume
+        )
+    )
+
+    return solid
+
+
+# ============================================================
+# GŁÓWNA FUNKCJA
+# ============================================================
+
+def main():
+
+    source_doc = App.ActiveDocument
+
+    if source_doc is None:
+
+        error(
+            "IFC → Solids",
+            "Brak aktywnego dokumentu."
+        )
+
+        return
+
+    # --------------------------------------------------------
+    # Sprawdzenie geometrii
+    # --------------------------------------------------------
+
+    try:
+
+        source = get_source_object(
+            source_doc
+        )
+
+    except Exception as e:
+
+        error(
+            "IFC → Solids",
+            str(e)
+        )
+
+        return
+
+    if source is None:
+
+        warning(
+            "Brak geometrii IFC",
+            "Nie znaleziono załadowanej geometrii.\n\n"
+            "Najprawdopodobniej podczas importu IFC "
+            "nie wybrano:\n\n"
+            "Representation type → "
+            "\"Load the shape (slower)\"\n\n"
+            "Uruchom import IFC ponownie z tą opcją."
+        )
+
+        return
+
+    # --------------------------------------------------------
+    # Pobranie wszystkich Face
+    # --------------------------------------------------------
+
+    faces = list(
+        source.Shape.Faces
+    )
+
+    if len(faces) == 0:
+
+        warning(
+            "Brak powierzchni",
+            "Obiekt IFC nie zawiera Face."
+        )
+
+        return
+
+    print("")
+    print("========================================")
+    print(" IFC → SOLIDS → IFC")
+    print("========================================")
+    print("Face:", len(faces))
+
+    # --------------------------------------------------------
+    # Utworzenie Shelli
+    # --------------------------------------------------------
+
+    try:
+
+        shell_compound = Part.makeShell(
+            faces
+        )
+
+    except Exception as e:
+
+        error(
+            "Błąd tworzenia Shell",
+            str(e)
+        )
+
+        return
+
+    shells = list(
+        shell_compound.Shells
+    )
+
+    print(
+        "Shells:",
+        len(shells)
+    )
+
+    # --------------------------------------------------------
+    # Zamiana Shell -> Solid
+    # --------------------------------------------------------
+
+    solids = []
+
+    repaired_count = 0
+
+    try:
+
+        for i, shell in enumerate(shells):
+
+            was_open = not shell.isClosed()
+
+            print(
+                "Shell %d/%d | faces=%d | closed=%s"
+                % (
+                    i + 1,
+                    len(shells),
+                    len(shell.Faces),
+                    shell.isClosed()
+                )
+            )
+
+            solid = shell_to_solid(
+                shell,
+                i
+            )
+
+            if was_open:
+
+                repaired_count += 1
+
+                print(
+                    "  -> Shell naprawiony."
+                )
+
+            solids.append(
+                solid
+            )
+
+    except Exception as e:
+
+        error(
+            "Błąd tworzenia brył",
+            str(e)
+        )
+
+        return
+
+    # --------------------------------------------------------
+    # Kontrola końcowa
+    # --------------------------------------------------------
+
+    invalid = []
+
+    for i, solid in enumerate(solids):
+
+        if solid.ShapeType != "Solid":
+
+            error(
+                "Błąd",
+                "Obiekt nr %d nie jest typu Solid."
+                % (i + 1)
+            )
+
+            return
+
+        if len(solid.Solids) != 1:
+
+            error(
+                "Błąd",
+                "Obiekt nr %d nie zawiera dokładnie "
+                "jednej bryły."
+                % (i + 1)
+            )
+
+            return
+
+        # ----------------------------------------------------
+        # isValid=False NIE przerywa procesu.
+        #
+        # Potwierdziliśmy na naszym pliku, że takie Solid
+        # może zostać poprawnie wyeksportowane do IFC
+        # i rozpoznane przez GstarCAD jako 3D Solid.
+        # ----------------------------------------------------
+
+        if not solid.isValid():
+
+            invalid.append(
+                i + 1
+            )
+
+    print("")
+    print(
+        "Solidów:",
+        len(solids)
+    )
+
+    print(
+        "Naprawionych Shell:",
+        repaired_count
+    )
+
+    print(
+        "Solidów isValid=False:",
+        len(invalid)
+    )
+
+    if invalid:
+
+        print(
+            "isValid=False:",
+            invalid
+        )
+
+    # --------------------------------------------------------
+    # Nowy dokument wyjściowy
+    # --------------------------------------------------------
+
+    try:
+
+        output_doc = App.newDocument(
+            "SOLIDS"
+        )
+
+    except Exception as e:
+
+        error(
+            "Błąd tworzenia dokumentu",
+            str(e)
+        )
+
+        return
+
+    # --------------------------------------------------------
+    # Dodanie tylko Solidów
+    # --------------------------------------------------------
+
+    for i, solid in enumerate(
+        solids,
+        start=1
+    ):
+
+        obj = output_doc.addObject(
+            "Part::Feature",
+            "Solid_%02d" % i
+        )
+
+        obj.Label = (
+            "Solid %02d" % i
+        )
+
+        obj.Shape = solid
+
+    output_doc.recompute()
+
+    # --------------------------------------------------------
+    # Ostateczna kontrola obiektów
+    # --------------------------------------------------------
+
+    for obj in output_doc.Objects:
+
+        if obj.Shape.ShapeType != "Solid":
+
+            error(
+                "Błąd",
+                "Obiekt %s nie jest Solid."
+                % obj.Name
+            )
+
+            return
+
+        if len(obj.Shape.Solids) != 1:
+
+            error(
+                "Błąd",
+                "Obiekt %s nie zawiera dokładnie "
+                "jednej bryły."
+                % obj.Name
+            )
+
+            return
+
+    # --------------------------------------------------------
+    # Eksport IFC
+    # --------------------------------------------------------
+
+    try:
+
+        import nativeifc.ifc_export as ifc_export
+
+        if os.path.exists(OUTPUT_FILE):
+
+            os.remove(
+                OUTPUT_FILE
+            )
+
+        ifc_export.exportIFC.export(
+            output_doc.Objects,
+            OUTPUT_FILE
+        )
+
+    except Exception as e:
+
+        error(
+            "Błąd eksportu IFC",
+            str(e)
+        )
+
+        return
+
+    # --------------------------------------------------------
+    # Kontrola pliku
+    # --------------------------------------------------------
+
+    if not os.path.exists(OUTPUT_FILE):
+
+        error(
+            "Błąd",
+            "Eksporter nie utworzył pliku IFC."
+        )
+
+        return
+
+    file_size = os.path.getsize(
+        OUTPUT_FILE
+    )
+
+    # --------------------------------------------------------
+    # Widok
+    # --------------------------------------------------------
+
+    try:
+
+        Gui.activeDocument().activeView().fitAll()
+
+    except:
+
+        pass
+
+    # --------------------------------------------------------
+    # Wynik
+    # --------------------------------------------------------
+
+    message = (
+        "Gotowe!\n\n"
+        "Solidów: %d\n"
+        "Naprawionych Shell: %d\n"
+        "Rozmiar IFC: %.1f KB\n\n"
+        "Plik:\n%s"
+        % (
+            len(solids),
+            repaired_count,
+            file_size / 1024.0,
+            OUTPUT_FILE
+        )
+    )
+
+    if invalid:
+
+        message += (
+            "\n\nUwaga:\n"
+            "FreeCAD zgłasza isValid=False dla "
+            "%d Solidów: %s\n\n"
+            "Zostały one mimo tego wyeksportowane "
+            "do IFC, ponieważ taki przypadek "
+            "został zweryfikowany w GstarCAD."
+            % (
+                len(invalid),
+                ", ".join(
+                    str(x) for x in invalid
+                )
+            )
+        )
+
+    info(
+        "IFC → SOLIDS → IFC",
+        message
+    )
+
+
+# ============================================================
+# START
+# ============================================================
+
+main()
