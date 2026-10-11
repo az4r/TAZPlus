@@ -4,7 +4,7 @@
 ;; Co robi:
 ;;  1. Wczytuje plik taz_s_data_file (setq wykonuja sie po kolei,
 ;;     wiec w pamieci zostaja same aktualne/ostatnie wartosci)
-;;  2. Szuka na rysunku bryl 3D na warstwie "taz_s_beam"
+;;  2. Szuka na rysunku bryl 3D na warstwie "taz_s_beam" oraz "taz_s_plate"
 ;;  3. Czysci plik i zapisuje go od nowa - dla kazdej bryly z
 ;;     rysunku, dane pobrane z pamieci, w tej samej kolejnosci
 ;;     jak w oryginalnym kodzie zapisujacym
@@ -27,12 +27,12 @@
       ;; -- 1. wczytujemy plik - w pamieci zostana tylko ostatnie wartosci --
       (load taz_s_data_file)
 
-      ;; -- 2. szukamy bryl 3D na warstwie taz_s_beam --
-      (setq taz_s_selection_set (ssget "_X" '((0 . "3DSOLID") (8 . "taz_s_beam"))))
+      ;; -- 2. szukamy bryl 3D na warstwie taz_s_beam oraz taz_s_plate--
+      (setq taz_s_selection_set (ssget "_X" '((0 . "3DSOLID") (-4 . "<OR") (8 . "taz_s_beam") (8 . "taz_s_plate") (-4 . "OR>"))))
 
       (if (= taz_s_selection_set nil)
 
-        (princ "\nNie znaleziono zadnych bryl 3D na warstwie taz_s_beam.")
+        (princ "\nNie znaleziono zadnych bryl 3D na warstwie taz_s_beam oraz taz_s_plate.")
 
         (progn
 
