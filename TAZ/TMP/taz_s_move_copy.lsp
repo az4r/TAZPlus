@@ -9,7 +9,9 @@
 ;;   3. Okno DCL (plik taz_s_move_copy.dcl):
 ;;        - radio button: Move / Copy
 ;;        - pola tekstowe: X, Y, Z
-;;        - przycisk Point (na razie bez działania)
+;;        - przycisk Point: okno zamyka się, użytkownik wskazuje dwa
+;;          punkty w rysunku, a ich różnica (punkt 2 minus punkt 1)
+;;          trafia do pól X, Y, Z; potem okno otwiera się ponownie
 ;;        - przyciski OK i Anuluj
 ;;   4. OK     -> dla każdego zaznaczonego obiektu:
 ;;                - obiekt z atrybutami w pliku taz_s_beam_data.txt
@@ -46,9 +48,13 @@
   (setq taz_s_move_copy_y "0")
   (setq taz_s_move_copy_z "0")
 
+  ;; punkty wskazane przyciskiem Point
+  (setq taz_s_move_copy_pick_p1 nil)
+  (setq taz_s_move_copy_pick_p2 nil)
+
   (setq taz_s_move_copy_dcl_id 0)
 
-  ;; wynik okna DCL: 0 = Anuluj, 1 = OK
+  ;; wynik okna DCL: 0 = Anuluj, 1 = OK, 2 = kliknięto Point
   (setq taz_s_move_copy_dialog_result 0)
 
   ;; ---------------------------------------------------------
@@ -93,48 +99,64 @@
 
   ;; ---------------------------------------------------------
   ;; OKNO DIALOGOWE
-  ;; Wynik: 0 = Anuluj, 1 = OK
+  ;; Wynik: 0 = Anuluj, 1 = OK, 2 = kliknięto "Point"
+  ;; Jeśli 2 -> pobieramy punkty, liczymy wektor i otwieramy
+  ;; okno ponownie z uzupełnionymi polami.
   ;; ---------------------------------------------------------
 
   (if taz_s_move_copy_can_continue
     (progn
 
-      (setq taz_s_move_copy_dcl_id (load_dialog "taz_s_move_copy.dcl"))
-      (new_dialog "taz_s_move_copy_dialog" taz_s_move_copy_dcl_id)
+      (setq taz_s_move_copy_dialog_result 2)
 
-      ;; stan początkowy radio buttonów
-      (if (= taz_s_move_copy_mode "1")
-        (progn
-          (set_tile "taz_s_mode_move" "1")
-          (set_tile "taz_s_mode_copy" "0")
+      (while (= taz_s_move_copy_dialog_result 2)
+
+        (setq taz_s_move_copy_dcl_id (load_dialog "taz_s_move_copy.dcl"))
+        (new_dialog "taz_s_move_copy_dialog" taz_s_move_copy_dcl_id)
+
+        ;; stan początkowy radio buttonów
+        (if (= taz_s_move_copy_mode "1")
+          (progn
+            (set_tile "taz_s_mode_move" "1")
+            (set_tile "taz_s_mode_copy" "0")
+          )
+          (progn
+            (set_tile "taz_s_mode_move" "0")
+            (set_tile "taz_s_mode_copy" "1")
+          )
         )
-        (progn
-          (set_tile "taz_s_mode_move" "0")
-          (set_tile "taz_s_mode_copy" "1")
+
+        ;; wartości początkowe pól tekstowych
+        (set_tile "taz_s_x" taz_s_move_copy_x)
+        (set_tile "taz_s_y" taz_s_move_copy_y)
+        (set_tile "taz_s_z" taz_s_move_copy_z)
+
+        ;; wybór trybu
+        (action_tile "taz_s_mode_move" "(setq taz_s_move_copy_mode \"1\")")
+        (action_tile "taz_s_mode_copy" "(setq taz_s_move_copy_mode \"0\")")
+
+        ;; przycisk Point - odczytaj pola i zamknij okno z wynikiem 2
+        ;; (odczyt pól, żeby wpisane wartości nie zginęły po ponownym
+        ;; otwarciu okna)
+        (action_tile "taz_s_point" "(taz_s_move_copy_read_values)(done_dialog 2)")
+
+        ;; OK - odczytaj pola i zamknij okno z wynikiem 1
+        (action_tile "accept" "(taz_s_move_copy_read_values)(done_dialog 1)")
+
+        ;; Anuluj - zamknij okno z wynikiem 0
+        (action_tile "cancel" "(done_dialog 0)")
+
+        (setq taz_s_move_copy_dialog_result (start_dialog))
+
+        (unload_dialog taz_s_move_copy_dcl_id)
+
+        ;; kliknięto Point - pobranie wektora z dwóch punktów
+        (if (= taz_s_move_copy_dialog_result 2)
+          (taz_s_move_copy_pick_vector)
+          (princ)
         )
+
       )
-
-      ;; wartości początkowe pól tekstowych
-      (set_tile "taz_s_x" taz_s_move_copy_x)
-      (set_tile "taz_s_y" taz_s_move_copy_y)
-      (set_tile "taz_s_z" taz_s_move_copy_z)
-
-      ;; wybór trybu
-      (action_tile "taz_s_mode_move" "(setq taz_s_move_copy_mode \"1\")")
-      (action_tile "taz_s_mode_copy" "(setq taz_s_move_copy_mode \"0\")")
-
-      ;; przycisk Point - na razie bez logiki, kliknięcie niczego nie robi
-      (action_tile "taz_s_point" "(princ)")
-
-      ;; OK - odczytaj pola i zamknij okno z wynikiem 1
-      (action_tile "accept" "(taz_s_move_copy_read_values)(done_dialog 1)")
-
-      ;; Anuluj - zamknij okno z wynikiem 0
-      (action_tile "cancel" "(done_dialog 0)")
-
-      (setq taz_s_move_copy_dialog_result (start_dialog))
-
-      (unload_dialog taz_s_move_copy_dcl_id)
 
     )
     (princ)
@@ -164,7 +186,7 @@
 
 ;; ---------------------------------------------------------
 ;; ODCZYT WARTOŚCI Z OKNA DIALOGOWEGO
-;; Wywoływane po kliknięciu OK (z wnętrza action_tile).
+;; Wywoływane po kliknięciu OK albo Point (z wnętrza action_tile).
 ;; Puste pole oznacza wartość 0.
 ;; ---------------------------------------------------------
 
@@ -177,6 +199,46 @@
   (if (= taz_s_move_copy_x "") (setq taz_s_move_copy_x "0") (princ))
   (if (= taz_s_move_copy_y "") (setq taz_s_move_copy_y "0") (princ))
   (if (= taz_s_move_copy_z "") (setq taz_s_move_copy_z "0") (princ))
+
+  (princ)
+
+)
+
+;; ---------------------------------------------------------
+;; POBRANIE WEKTORA PRZESUNIĘCIA Z DWÓCH PUNKTÓW
+;; Wywoływane po kliknięciu przycisku Point (wynik okna = 2).
+;; Użytkownik wskazuje dwa punkty w rysunku, a ich różnica
+;; (punkt 2 minus punkt 1) trafia do pól X, Y, Z jako tekst.
+;; Punkty są podane w UCS aktywnym w tej chwili, czyli w UCS sprzed
+;; uruchomienia komendy - wektor jest więc w tym samym UCS.
+;; Enter przy wskazywaniu punktu = rezygnacja: pola zostają takie,
+;; jakie były przed zamknięciem okna.
+;; ---------------------------------------------------------
+
+(defun taz_s_move_copy_pick_vector ()
+
+  (setq taz_s_move_copy_pick_p1 nil)
+  (setq taz_s_move_copy_pick_p2 nil)
+
+  (setq taz_s_move_copy_pick_p1 (getpoint "\nPodaj pierwszy punkt wektora przesunięcia: "))
+
+  (if taz_s_move_copy_pick_p1
+    (setq taz_s_move_copy_pick_p2 (getpoint taz_s_move_copy_pick_p1 "\nPodaj drugi punkt wektora przesunięcia: "))
+    (princ)
+  )
+
+  (if (and taz_s_move_copy_pick_p1 taz_s_move_copy_pick_p2)
+    (progn
+      (setq taz_s_move_copy_pick_dx (- (car taz_s_move_copy_pick_p2) (car taz_s_move_copy_pick_p1)))
+      (setq taz_s_move_copy_pick_dy (- (cadr taz_s_move_copy_pick_p2) (cadr taz_s_move_copy_pick_p1)))
+      (setq taz_s_move_copy_pick_dz (- (caddr taz_s_move_copy_pick_p2) (caddr taz_s_move_copy_pick_p1)))
+
+      (setq taz_s_move_copy_x (rtos taz_s_move_copy_pick_dx 2 6))
+      (setq taz_s_move_copy_y (rtos taz_s_move_copy_pick_dy 2 6))
+      (setq taz_s_move_copy_z (rtos taz_s_move_copy_pick_dz 2 6))
+    )
+    (princ)
+  )
 
   (princ)
 
@@ -510,6 +572,13 @@
       (setq taz_s_edit_section_position_mode nil)
       (setq taz_s_edit_beam_path_mode T)
       (setq taz_s_edit_mode T)
+      
+      (command "_LINE" '(-50 -50 0) '(50 50 0) "")
+      (command "_PLAN" "_C")
+      (command "_ZOOM" "_OBJECT" (entlast) "")
+      (entdel (entlast))
+      (command "_ZOOM" "_SCALE" "1000X")
+      (command "REGEN")
 
       (c:taz_s_create_beam)
 
