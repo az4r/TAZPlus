@@ -33,14 +33,16 @@
   (setq taz_s_add_attributes_ok T)
 
   ;; ---------------------------------------------------------
-  ;; SELEKCJA OBIEKTOW - bez filtra typu obiektu
+  ;; SELEKCJA OBIEKTOW - tylko 3DSOLID - bez filtra typu obiektu zakomentowane
   ;; Najpierw obiekty zaznaczone wczesniej, potem wskazanie jednego
   ;; ---------------------------------------------------------
 
-  (setq taz_s_add_attributes_selection (ssget "_I"))
+  ;;(setq taz_s_add_attributes_selection (ssget "_I"))
+  (setq taz_s_add_attributes_selection (ssget "_I" '((0 . "3DSOLID"))))
 
   (if (not taz_s_add_attributes_selection)
-    (setq taz_s_add_attributes_selection (ssget "_+.:E:S"))
+    ;;(setq taz_s_add_attributes_selection (ssget "_+.:E:S"))
+    (setq taz_s_add_attributes_selection (ssget "_+.:E:S" '((0 . "3DSOLID"))))
     (princ)
   )
 
