@@ -128,11 +128,13 @@
   ;; USUN BRYLE Z RYSUNKU
   ;; ---------------------------------------------------------
 
-  (command "_LAYER" "_U" "taz_s_beam" "")
+  ;;(command "_LAYER" "_U" "taz_s_beam" "")
+  (taz_s_unlock_all_layers)
   (if (and taz_s_delete_object (entget taz_s_delete_object))
     (entdel taz_s_delete_object)
   )
-  (command "_LAYER" "_LO" "taz_s_beam" "")
+  ;;(command "_LAYER" "_LO" "taz_s_beam" "")
+  (taz_s_lock_all_layers)
 
   ;; ---------------------------------------------------------
   ;; SPRZATANIE ZMIENNYCH POMOCNICZYCH
