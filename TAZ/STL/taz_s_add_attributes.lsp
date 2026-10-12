@@ -34,7 +34,7 @@
 
   ;; ---------------------------------------------------------
   ;; SELEKCJA OBIEKTOW - tylko 3DSOLID - bez filtra typu obiektu zakomentowane
-  ;; Najpierw obiekty zaznaczone wczesniej, potem wskazanie jednego
+  ;; Najpierw obiekty zaznaczone wczesniej, potem wskazanie nowego zbioru
   ;; ---------------------------------------------------------
 
   ;;(setq taz_s_add_attributes_selection (ssget "_I"))
@@ -42,7 +42,8 @@
 
   (if (not taz_s_add_attributes_selection)
     ;;(setq taz_s_add_attributes_selection (ssget "_+.:E:S"))
-    (setq taz_s_add_attributes_selection (ssget "_+.:E:S" '((0 . "3DSOLID"))))
+    ;;(setq taz_s_add_attributes_selection (ssget "_+.:E:S" '((0 . "3DSOLID"))))
+    (setq taz_s_add_attributes_selection (ssget '((0 . "3DSOLID"))))
     (princ)
   )
 
@@ -183,7 +184,8 @@
     (progn
       (close taz_s_add_attributes_file)
       (load taz_s_add_attributes_data_file)
-      (princ (strcat "\nDodano atrybuty do obiektow: " (itoa taz_s_add_attributes_added) ". Pominieto (maja juz atrybuty lub brak handle): " (itoa taz_s_add_attributes_skipped) "."))
+      (princ (strcat "\nDodano atrybuty do obiektow (pamietaj aby zmienic warstwe na taz_s_beam lub taz_s_plate): " (itoa taz_s_add_attributes_added) "."))
+      (princ (strcat "\nPominieto (maja juz atrybuty lub brak handle): " (itoa taz_s_add_attributes_skipped) "."))
     )
     (princ)
   )
