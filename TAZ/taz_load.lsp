@@ -24,6 +24,7 @@
   (load "C:\\TAZ\\STL\\taz_s_project_parameters.dcl")
   (load "C:\\TAZ\\STL\\taz_s_project_parameters.lsp")
   (load "C:\\TAZ\\STL\\taz_s_rebuild_data.lsp")
+  (load "C:\\TAZ\\STL\\taz_s_remove_attributes.lsp")
   (load "C:\\TAZ\\STL\\taz_s_section_cbeam_draw.lsp")
   (load "C:\\TAZ\\STL\\taz_s_section_cbeam_draw_parametres_upe.lsp")
   (load "C:\\TAZ\\STL\\taz_s_section_cbeam_draw_parametres_upn.lsp")
