@@ -14,23 +14,17 @@
 ;;          trafia do pól X, Y, Z; potem okno otwiera się ponownie
 ;;        - przyciski OK i Anuluj
 ;;   4. OK     -> dla każdego zaznaczonego obiektu:
-;;                - obiekt z atrybutami w pliku taz_s_objects_data.txt
+;;                - obiekt z atrybutami w pliku taz_s_beam_data.txt
 ;;                  (section_angle, section_position, sweep_p1, sweep_p2):
 ;;                  do sweep_p1 i sweep_p2 dodawane są X, Y, Z z okna DCL,
 ;;                  z nowych punktów taz_s_create_beam tworzy nową bryłę,
 ;;                  a atrybuty starej bryły są przenoszone na nową
-;;                  (w pamięci i w pliku taz_s_objects_data.txt),
+;;                  (w pamięci i w pliku taz_s_beam_data.txt),
 ;;                - obiekt bez atrybutów: komenda COPY o wektor X, Y, Z.
 ;;      Anuluj -> przerwanie działania skryptu
 ;;
 ;; Move: po utworzeniu nowego obiektu (nowa bryła albo kopia) obiekt
 ;; bazowy jest usuwany. Copy: obiekty bazowe zostają nietknięte.
-;;
-;; UCS: wektor X, Y, Z (wpisany ręcznie albo wskazany przyciskiem
-;; Point) jest podawany w UCS, który był aktywny tuż przed uruchomieniem
-;; komendy. Dalsza praca odbywa się w World, więc wektor jest
-;; przeliczany z tego UCS do World, a po zakończeniu pracy UCS sprzed
-;; uruchomienia komendy jest przywracany.
 ;; =========================================================
 
 (defun c:taz_s_move_copy ()
@@ -53,10 +47,6 @@
   (setq taz_s_move_copy_x "0")
   (setq taz_s_move_copy_y "0")
   (setq taz_s_move_copy_z "0")
-
-  ;; licznik cykli przycisku Point (obejście "widmowego" punktu
-  ;; przy drugim cyklu - patrz taz_s_move_copy_pick_vector)
-  (setq taz_s_move_copy_pick_counter 1)
 
   ;; punkty wskazane przyciskiem Point
   (setq taz_s_move_copy_pick_p1 nil)
@@ -230,17 +220,6 @@
   (setq taz_s_move_copy_pick_p1 nil)
   (setq taz_s_move_copy_pick_p2 nil)
 
-  ;; -----------------------------------------------------------
-  ;; Obejście problemu z "widmowym" punktem przy DRUGIM cyklu:
-  ;; jeśli licznik ma wartość 2, "pochłaniamy" zalegające
-  ;; zdarzenie pustym getpoint przed właściwym pobraniem punktów.
-  ;; -----------------------------------------------------------
-
-  ;;(if (= taz_s_move_copy_pick_counter 2)
-    ;;(getpoint)
-    ;;(princ)
-  ;;)
-
   (setq taz_s_move_copy_pick_p1 (getpoint "\nPodaj pierwszy punkt wektora przesunięcia: "))
 
   (if taz_s_move_copy_pick_p1
@@ -260,9 +239,6 @@
     )
     (princ)
   )
-
-  ;; licznik cykli - inkrementacja na końcu każdego przebiegu
-  (setq taz_s_move_copy_pick_counter (+ taz_s_move_copy_pick_counter 1))
 
   (princ)
 
@@ -304,7 +280,7 @@
 ;; ODCZYT HANDLE I ATRYBUTÓW OBIEKTU
 ;; Dla obiektu z globalnej zmiennej taz_s_move_copy_run_ename:
 ;;   1. pobiera handle obiektu (kod DXF 5) - z niego zbudowane
-;;      są nazwy zmiennych w pliku taz_s_objects_data.txt,
+;;      są nazwy zmiennych w pliku taz_s_beam_data.txt,
 ;;   2. odczytuje zmienne:
 ;;        taz_s_<handle>_section_angle    -> taz_s_move_copy_attr_angle
 ;;        taz_s_<handle>_section_position -> taz_s_move_copy_attr_position
@@ -508,7 +484,7 @@
 ;;      ścieżki (nowe punkty przekazywane zmiennymi
 ;;      taz_s_edit_new_path_p1 i taz_s_edit_new_path_p2),
 ;;   4. przenosi atrybuty ze starej bryły na nową - w pamięci
-;;      i w pliku taz_s_objects_data.txt.
+;;      i w pliku taz_s_beam_data.txt.
 ;; Tryb Move: stara bryła jest usuwana PRZED zapisem pliku, tak jak
 ;; w skryptach edycji (dzięki temu rebuild jest tuż po zamknięciu
 ;; pliku). Tryb Copy: stara bryła zostaje.
@@ -739,194 +715,6 @@
 )
 
 ;; ---------------------------------------------------------
-;; ZAKOŃCZENIE NIEDOKOŃCZONEJ KOMENDY
-;; Jeśli po poleceniu UCS nadal jest aktywna jakaś komenda (np. UCS
-;; nie rozpoznał opcji i czeka na dalsze dane), kończy ją tak jak
-;; klawisz Esc. Gdy żadna komenda nie jest aktywna - nic nie robi.
-;; Licznik chroni przed pętlą nieskończoną.
-;; ---------------------------------------------------------
-
-(defun taz_s_move_copy_ucs_cancel_pending ()
-
-  (setq taz_s_move_copy_ucs_guard 0)
-
-  (while (and (> (getvar "CMDACTIVE") 0) (< taz_s_move_copy_ucs_guard 10))
-    (command)
-    (setq taz_s_move_copy_ucs_guard (+ taz_s_move_copy_ucs_guard 1))
-  )
-
-  (princ)
-
-)
-
-;; ---------------------------------------------------------
-;; ZAPIS UCS SPRZED URUCHOMIENIA KOMENDY
-;; Wywoływane na samym początku taz_s_move_copy_run, zanim cokolwiek
-;; zmieni UCS. Zapamiętuje, jak przywrócić aktywny UCS
-;; (zmienna taz_s_move_copy_ucs_kind):
-;;   "world"   - aktywny jest UCS World -> na końcu: UCS World,
-;;   "named"   - aktywny jest UCS z nazwą -> na końcu: przywrócenie
-;;               go po nazwie (nic nie jest zapisywane w rysunku),
-;;   "unnamed" - aktywny jest UCS bez nazwy -> zapis pod nazwą
-;;               tymczasową, na końcu przywrócenie i usunięcie tej nazwy,
-;;   "failed"  - zapis się nie udał -> UCS nie zostanie przywrócony.
-;; Dodatkowo zapamiętuje początek i kierunki osi UCS (we współrzędnych
-;; World), żeby po przywróceniu sprawdzić, czy UCS jest ten sam.
-;; ---------------------------------------------------------
-
-(defun taz_s_move_copy_ucs_save ()
-
-  (setq taz_s_move_copy_ucs_temp_name "taz_s_move_copy_ucs_temp")
-
-  ;; geometria aktywnego UCS - do sprawdzenia po przywróceniu
-  (setq taz_s_move_copy_ucs_origin (getvar "UCSORG"))
-  (setq taz_s_move_copy_ucs_xdir (getvar "UCSXDIR"))
-  (setq taz_s_move_copy_ucs_ydir (getvar "UCSYDIR"))
-
-  ;; nazwa aktywnego UCS (pusty tekst = UCS bez nazwy albo World)
-  (setq taz_s_move_copy_ucs_name (getvar "UCSNAME"))
-
-  (if (null taz_s_move_copy_ucs_name)
-    (setq taz_s_move_copy_ucs_name "")
-    (princ)
-  )
-
-  ;; sposób przywrócenia - domyślnie UCS bez nazwy
-  (setq taz_s_move_copy_ucs_kind "unnamed")
-
-  ;; UCS z nazwą - tylko jeśli taka nazwa naprawdę istnieje w rysunku
-  (setq taz_s_move_copy_ucs_found nil)
-
-  (if (/= taz_s_move_copy_ucs_name "")
-    (setq taz_s_move_copy_ucs_found (tblsearch "UCS" taz_s_move_copy_ucs_name))
-    (princ)
-  )
-
-  (if taz_s_move_copy_ucs_found
-    (setq taz_s_move_copy_ucs_kind "named")
-    (princ)
-  )
-
-  ;; UCS World (ma pierwszeństwo przed pozostałymi)
-  (if (= (getvar "WORLDUCS") 1)
-    (setq taz_s_move_copy_ucs_kind "world")
-    (princ)
-  )
-
-  ;; UCS bez nazwy: zapis pod nazwą tymczasową
-  (if (= taz_s_move_copy_ucs_kind "unnamed")
-    (progn
-
-      ;; pozostałość po przerwanym uruchomieniu - usuwamy
-      (if (tblsearch "UCS" taz_s_move_copy_ucs_temp_name)
-        (progn
-          (command "_.UCS" "_D" taz_s_move_copy_ucs_temp_name)
-          (taz_s_move_copy_ucs_cancel_pending)
-        )
-        (princ)
-      )
-
-      (command "_.UCS" "_S" taz_s_move_copy_ucs_temp_name)
-      (taz_s_move_copy_ucs_cancel_pending)
-
-      ;; kontrola: czy nazwa tymczasowa powstała
-      (if (tblsearch "UCS" taz_s_move_copy_ucs_temp_name)
-        (princ)
-        (progn
-          (setq taz_s_move_copy_ucs_kind "failed")
-          (princ "\nUWAGA: nie udało się zapisać aktualnego UCS - po zakończeniu skryptu nie zostanie przywrócony.")
-        )
-      )
-
-    )
-    (princ)
-  )
-
-  (princ)
-
-)
-
-;; ---------------------------------------------------------
-;; PRZYWRÓCENIE UCS SPRZED URUCHOMIENIA KOMENDY
-;; Wywoływane na samym końcu taz_s_move_copy_run, po wszystkich
-;; operacjach, które zmieniają UCS. Przywraca UCS zapamiętany przez
-;; taz_s_move_copy_ucs_save (sposób zależy od taz_s_move_copy_ucs_kind),
-;; a potem porównuje początek i osie UCS z zapamiętanymi.
-;; Jeśli UCS nie jest taki sam - wypisuje ostrzeżenie.
-;; ---------------------------------------------------------
-
-(defun taz_s_move_copy_ucs_restore ()
-
-  ;; World
-  (if (= taz_s_move_copy_ucs_kind "world")
-    (progn
-      (command "_.UCS" "_W")
-      (taz_s_move_copy_ucs_cancel_pending)
-    )
-    (princ)
-  )
-
-  ;; UCS z nazwą
-  (if (= taz_s_move_copy_ucs_kind "named")
-    (progn
-      (command "_.UCS" "_R" taz_s_move_copy_ucs_name)
-      (taz_s_move_copy_ucs_cancel_pending)
-    )
-    (princ)
-  )
-
-  ;; UCS bez nazwy: przywrócenie z nazwy tymczasowej i usunięcie tej nazwy
-  (if (= taz_s_move_copy_ucs_kind "unnamed")
-    (progn
-      (command "_.UCS" "_R" taz_s_move_copy_ucs_temp_name)
-      (taz_s_move_copy_ucs_cancel_pending)
-      (command "_.UCS" "_D" taz_s_move_copy_ucs_temp_name)
-      (taz_s_move_copy_ucs_cancel_pending)
-    )
-    (princ)
-  )
-
-  ;; zapis się nie udał - nic nie przywrócono
-  (if (= taz_s_move_copy_ucs_kind "failed")
-    (princ "\nUWAGA: UCS sprzed uruchomienia skryptu nie został przywrócony.")
-    (princ)
-  )
-
-  ;; kontrola: czy aktywny UCS jest taki sam jak zapamiętany
-  (if (/= taz_s_move_copy_ucs_kind "failed")
-    (progn
-
-      (setq taz_s_move_copy_ucs_same T)
-
-      (if (equal (getvar "UCSORG") taz_s_move_copy_ucs_origin 0.000001)
-        (princ)
-        (setq taz_s_move_copy_ucs_same nil)
-      )
-
-      (if (equal (getvar "UCSXDIR") taz_s_move_copy_ucs_xdir 0.000001)
-        (princ)
-        (setq taz_s_move_copy_ucs_same nil)
-      )
-
-      (if (equal (getvar "UCSYDIR") taz_s_move_copy_ucs_ydir 0.000001)
-        (princ)
-        (setq taz_s_move_copy_ucs_same nil)
-      )
-
-      (if taz_s_move_copy_ucs_same
-        (princ)
-        (princ "\nUWAGA: UCS po zakończeniu skryptu różni się od UCS sprzed uruchomienia.")
-      )
-
-    )
-    (princ)
-  )
-
-  (princ)
-
-)
-
-;; ---------------------------------------------------------
 ;; PRZESUNIĘCIE / KOPIOWANIE ZAZNACZONYCH OBIEKTÓW
 ;; Wywoływane po kliknięciu OK. Dla każdego obiektu z listy
 ;; taz_s_move_copy_ename_list:
@@ -935,19 +723,9 @@
 ;;   - pozostałe obiekty -> komenda COPY (taz_s_move_copy_plain_copy).
 ;; Tryb Move (radio w oknie DCL): po utworzeniu nowego obiektu obiekt
 ;; bazowy jest usuwany. Tryb Copy: obiekty bazowe zostają.
-;; UCS: na początku zapisywany jest UCS sprzed uruchomienia komendy,
-;; wektor X, Y, Z jest przeliczany z tego UCS do World, dalsza praca
-;; odbywa się w World, a na końcu UCS sprzed uruchomienia komendy
-;; jest przywracany.
 ;; ---------------------------------------------------------
 
 (defun taz_s_move_copy_run ()
-
-  ;; --- UCS: zapis UCS sprzed uruchomienia komendy ---
-  ;; Musi być pierwszym krokiem, zanim cokolwiek zmieni UCS.
-  ;; Przywraca go taz_s_move_copy_ucs_restore na samym końcu.
-
-  (taz_s_move_copy_ucs_save)
 
   ;; --- wartości przesunięcia: tekst z okna DCL -> liczby ---
 
@@ -963,20 +741,35 @@
   (taz_s_move_copy_replace_comma)
   (setq taz_s_move_copy_offset_z (atof taz_s_move_copy_comma_output))
 
-  ;; --- wektor przesunięcia: z UCS użytkownika do World ---
-  ;; Wartości X, Y, Z (wpisane ręcznie albo z przycisku Point) są podane
-  ;; w UCS, który był aktywny przed uruchomieniem komendy. Dalsza praca
-  ;; odbywa się w World, więc wektor trzeba przeliczyć teraz, dopóki
-  ;; aktywny jest jeszcze UCS użytkownika.
-  ;; trans: 1 = aktywny UCS, 0 = World, T = przeliczany jest wektor
-  ;; (przesunięcie), a nie punkt - bez przesunięcia początku układu.
+  ;; --- wartości przesunięcia: UCS użytkownika -> WCS ---
+  ;; Liczby X, Y, Z z okna DCL są podane w UCS, który był aktywny tuż przed
+  ;; uruchomieniem skryptu. Dalsza część skryptu pracuje w UCS = World
+  ;; (komenda UCS World niżej), więc wektor przesunięcia przeliczamy na WCS
+  ;; teraz, dopóki aktywny jest jeszcze UCS użytkownika. Funkcja trans liczy
+  ;; zawsze względem UCS aktywnego w chwili wywołania.
+  ;; Dla wektora liczy się tylko obrót osi UCS, a nie położenie jego początku,
+  ;; dlatego od przeliczonego punktu (X,Y,Z) odejmujemy przeliczony punkt (0,0,0).
+  ;; Wynik wraca do zmiennych taz_s_move_copy_offset_x/y/z, dzięki czemu
+  ;; taz_s_move_copy_new_beam i taz_s_move_copy_plain_copy nie wymagają zmian.
+  ;; Dla UCS = World wynik jest identyczny jak przed przeliczeniem.
 
-  (setq taz_s_move_copy_vector_ucs (list taz_s_move_copy_offset_x taz_s_move_copy_offset_y taz_s_move_copy_offset_z))
-  (setq taz_s_move_copy_vector_world (trans taz_s_move_copy_vector_ucs 1 0 T))
+  ;; liczby wpisane w oknie DCL (w UCS użytkownika)
+  (setq taz_s_move_copy_ucs_x taz_s_move_copy_offset_x)
+  (setq taz_s_move_copy_ucs_y taz_s_move_copy_offset_y)
+  (setq taz_s_move_copy_ucs_z taz_s_move_copy_offset_z)
 
-  (setq taz_s_move_copy_offset_x (car taz_s_move_copy_vector_world))
-  (setq taz_s_move_copy_offset_y (cadr taz_s_move_copy_vector_world))
-  (setq taz_s_move_copy_offset_z (caddr taz_s_move_copy_vector_world))
+  ;; punkt (X Y Z) oraz początek (0 0 0), oba w UCS użytkownika
+  (setq taz_s_move_copy_ucs_point (list taz_s_move_copy_ucs_x taz_s_move_copy_ucs_y taz_s_move_copy_ucs_z))
+  (setq taz_s_move_copy_ucs_origin (list 0.0 0.0 0.0))
+
+  ;; oba punkty z UCS użytkownika (kod 1) na WCS (kod 0)
+  (setq taz_s_move_copy_wcs_point (trans taz_s_move_copy_ucs_point 1 0))
+  (setq taz_s_move_copy_wcs_origin (trans taz_s_move_copy_ucs_origin 1 0))
+
+  ;; wektor przesunięcia w WCS = różnica przeliczonych punktów
+  (setq taz_s_move_copy_offset_x (- (car taz_s_move_copy_wcs_point) (car taz_s_move_copy_wcs_origin)))
+  (setq taz_s_move_copy_offset_y (- (cadr taz_s_move_copy_wcs_point) (cadr taz_s_move_copy_wcs_origin)))
+  (setq taz_s_move_copy_offset_z (- (caddr taz_s_move_copy_wcs_point) (caddr taz_s_move_copy_wcs_origin)))
 
   ;; --- plik z danymi belek: ścieżka i wczytanie (jeżeli istnieje) ---
   ;; Dzięki temu zmienne z atrybutami są w pamięci także dla belek
@@ -984,7 +777,7 @@
   ;; samo jak w skryptach edycji (korzysta z niej też taz_s_rebuild_data).
 
   (setq taz_s_move_copy_data_folder (taz_s_path))
-  (setq taz_s_data_file (strcat taz_s_move_copy_data_folder "taz_s_objects_data.txt"))
+  (setq taz_s_data_file (strcat taz_s_move_copy_data_folder "taz_s_beam_data.txt"))
 
   (if (findfile taz_s_data_file)
     (load taz_s_data_file)
@@ -1044,11 +837,6 @@
 
   (taz_s_lock_all_layers)
   (taz_s_current_settings_restore)
-
-  ;; --- UCS: przywrócenie UCS sprzed uruchomienia komendy ---
-  ;; Po wszystkich operacjach, które zmieniają UCS.
-
-  (taz_s_move_copy_ucs_restore)
 
   ;; --- podsumowanie w wierszu poleceń ---
 
