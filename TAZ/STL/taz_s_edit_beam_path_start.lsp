@@ -153,16 +153,16 @@
                 ;;(write-line (strcat "(setq taz_s_" taz_s_attribs_object_name_new "_sweep_p1 (list " (rtos taz_s_p1x 2 6) " " (rtos taz_s_p1y 2 6) " " (rtos taz_s_p1z 2 6) "))") taz_s_f_beam_data)
                 ;;(write-line (strcat "(setq taz_s_" taz_s_attribs_object_name_new "_sweep_p2 (list " (rtos taz_s_p2x 2 6) " " (rtos taz_s_p2y 2 6) " " (rtos taz_s_p2z 2 6) "))") taz_s_f_beam_data)
                 
+                ;; Punkty ścieżki: zmienne taz_s_p1x ... taz_s_p2z są już gotowe - wypełnił je
+                ;; c:taz_s_create_beam z taz_s_edit_new_path_p1/p2. Tych dwóch nie czytaj tu
+                ;; ponownie: create_beam zeruje je na końcu (po powrocie są nil).
+                ;; Zmienne taz_s_p1x ... nadpisuje też c:taz_s_rebuild_data - jego ewentualne
+                ;; wywołanie musi być PO obu write-line poniżej i PO (close taz_s_f_beam_data).
+
                 ;; -- punkt początkowy ścieżki sterującej --
-                (setq taz_s_p1x (car taz_s_edit_new_path_p1))
-                (setq taz_s_p1y (cadr taz_s_edit_new_path_p1))
-                (setq taz_s_p1z (caddr taz_s_edit_new_path_p1))
                 (write-line (strcat "(setq taz_s_" taz_s_attribs_object_name "_sweep_p1 (list " (rtos taz_s_p1x 2 6) " " (rtos taz_s_p1y 2 6) " " (rtos taz_s_p1z 2 6) "))") taz_s_f_beam_data)
 
                 ;; -- punkt końcowy ścieżki sterującej --
-                (setq taz_s_p2x (car taz_s_edit_new_path_p2))
-                (setq taz_s_p2y (cadr taz_s_edit_new_path_p2))
-                (setq taz_s_p2z (caddr taz_s_edit_new_path_p2))
                 (write-line (strcat "(setq taz_s_" taz_s_attribs_object_name "_sweep_p2 (list " (rtos taz_s_p2x 2 6) " " (rtos taz_s_p2y 2 6) " " (rtos taz_s_p2z 2 6) "))") taz_s_f_beam_data)
 
                 (close taz_s_f_beam_data)
