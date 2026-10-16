@@ -33,9 +33,12 @@
           ;; ---------------------------------------------------------
           ;; OBSŁUGA KOPIOWANIA LINII – usuń kopię, nie generuj bryły
           ;; Jeżeli użytkownik skopiował linię sterującą (COPY/COPYCLIP
-          ;; itp.), w modelu pojawi się dodatkowa linia. Wykrywamy to
-          ;; sprawdzając czy ostatni obiekt w rysunku to linia różna
-          ;; od naszej linii sterującej i czy jest na warstwie edycji.
+          ;; itp.), w modelu pojawia się dodatkowa linia. Kasujemy wszystkie
+          ;; obiekty z warstwy taz_s_editing_layer poza naszą linią sterującą.
+          ;; Filtr jest po NAZWIE warstwy, a nie po bieżącej warstwie, żeby
+          ;; nigdy nie skasować obiektów z innej warstwy.
+          ;; Uwaga: COPY zakończone klawiszem ESC jest komendą anulowaną i ten
+          ;; blok się wtedy nie uruchamia - resztę sprząta taz_s_edit_beam_path_stop.
           ;; ---------------------------------------------------------
 
           (if (or (= taz_s_cmd "COPY")
@@ -46,7 +49,7 @@
                   (= taz_s_cmd "_PASTECLIP"))
             (progn
               (command "-VIEW" "_S" "taz_s_current_view")
-              (setq taz_s_cleanup_layer (ssget "_X" (list (cons 8 (getvar "CLAYER")) '(-4 . "<NOT") (cons 5 (cdr (assoc 5 (entget taz_s_attribs_line)))) '(-4 . "NOT>"))))
+              (setq taz_s_cleanup_layer (ssget "_X" (list (cons 8 "taz_s_editing_layer") '(-4 . "<NOT") (cons 5 (cdr (assoc 5 (entget taz_s_attribs_line)))) '(-4 . "NOT>"))))
               (command "_.ERASE" taz_s_cleanup_layer "")
             )
 
