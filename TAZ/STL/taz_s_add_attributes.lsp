@@ -28,6 +28,8 @@
 
   (setq taz_s_add_attributes_folder (taz_s_path))
   (setq taz_s_add_attributes_data_file (strcat taz_s_add_attributes_folder "taz_s_objects_data.txt"))
+  
+  (setq taz_s_data_file taz_s_add_attributes_data_file)
 
   ;; Znacznik: T = mozna isc dalej, nil = ktorys krok sie nie udal
   (setq taz_s_add_attributes_ok T)
@@ -68,7 +70,7 @@
   )
 
   (if taz_s_add_attributes_file_exists
-    (load taz_s_add_attributes_data_file)
+    (taz_s_load_data_file)
     (princ)
   )
 
@@ -183,7 +185,7 @@
   (if taz_s_add_attributes_ok
     (progn
       (close taz_s_add_attributes_file)
-      (load taz_s_add_attributes_data_file)
+      (taz_s_load_data_file)
       (princ (strcat "\nDodano atrybuty do obiektow (pamietaj aby zmienic warstwe na taz_s_beam lub taz_s_plate): " (itoa taz_s_add_attributes_added) "."))
       (princ (strcat "\nPominieto (maja juz atrybuty lub brak handle): " (itoa taz_s_add_attributes_skipped) "."))
     )

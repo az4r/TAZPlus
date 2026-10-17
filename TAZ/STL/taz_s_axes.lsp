@@ -24,7 +24,7 @@
   ;; ---------------------------------------------------------
 
   (if (findfile taz_s_axes_data_file)
-    (load taz_s_axes_data_file)
+    (taz_s_load_axes_data_file)
   )
 
   ;; ---------------------------

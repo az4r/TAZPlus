@@ -780,7 +780,7 @@
   (setq taz_s_data_file (strcat taz_s_move_copy_data_folder "taz_s_beam_data.txt"))
 
   (if (findfile taz_s_data_file)
-    (load taz_s_data_file)
+    (taz_s_load_data_file)
     (princ)
   )
 

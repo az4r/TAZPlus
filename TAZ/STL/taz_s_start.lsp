@@ -120,6 +120,117 @@
 )
 
 ;; ---------------------------------------------------------
+;; taz_s_load_file_safe
+;; Wejscie: zmienna globalna taz_s_load_file_safe_path
+;;          (pelna sciezka do pliku, ktory ma byc wczytany)
+;; ---------------------------------------------------------
+(defun taz_s_load_file_safe ()
+
+  ;; -- wyzerowanie zmiennych roboczych --
+  (setq taz_s_load_file_safe_found nil)
+  (setq taz_s_load_file_safe_handle nil)
+  (setq taz_s_load_file_safe_opened nil)
+  (setq taz_s_load_file_safe_line nil)
+  (setq taz_s_load_file_safe_has_data nil)
+  (setq taz_s_load_file_safe_skip nil)
+
+  ;; -- krok 1: czy plik istnieje --
+  (if taz_s_load_file_safe_path
+    (setq taz_s_load_file_safe_found (findfile taz_s_load_file_safe_path))
+    (princ)
+  )
+
+  ;; -- krok 2: otwarcie pliku do odczytu --
+  (if taz_s_load_file_safe_found
+    (setq taz_s_load_file_safe_handle (open taz_s_load_file_safe_found "r"))
+    (princ)
+  )
+
+  (if taz_s_load_file_safe_handle
+    (setq taz_s_load_file_safe_opened T)
+    (princ)
+  )
+
+  ;; -- krok 3: szukanie pierwszej linii zaczynajacej sie od "(" --
+  ;; read-line zwraca nil na koncu pliku (pusty plik: od razu nil)
+  (if taz_s_load_file_safe_opened
+    (setq taz_s_load_file_safe_line (read-line taz_s_load_file_safe_handle))
+    (princ)
+  )
+
+  (while taz_s_load_file_safe_line
+    (if (wcmatch taz_s_load_file_safe_line "(*")
+      (setq taz_s_load_file_safe_has_data T)
+      (princ)
+    )
+    (if taz_s_load_file_safe_has_data
+      (setq taz_s_load_file_safe_line nil)
+      (setq taz_s_load_file_safe_line (read-line taz_s_load_file_safe_handle))
+    )
+  )
+
+  (if taz_s_load_file_safe_opened
+    (close taz_s_load_file_safe_handle)
+    (princ)
+  )
+
+  ;; -- krok 4: decyzja, czy pominac (load) --
+
+  ;; plik otwarty poprawnie, ale bez ani jednej linii z danymi
+  (if (and taz_s_load_file_safe_opened (not taz_s_load_file_safe_has_data))
+    (setq taz_s_load_file_safe_skip T)
+    (princ)
+  )
+
+  ;; plik istnieje, ale nie da sie go otworzyc do odczytu
+  (if (and taz_s_load_file_safe_found (not taz_s_load_file_safe_opened))
+    (progn
+      (princ "\nUwaga: nie mozna otworzyc pliku do odczytu, pomijam wczytanie: ")
+      (princ taz_s_load_file_safe_found)
+      (setq taz_s_load_file_safe_skip T)
+    )
+    (princ)
+  )
+
+  ;; -- krok 5: wczytanie pliku --
+  (if taz_s_load_file_safe_skip
+    (princ)
+    (load taz_s_load_file_safe_path)
+  )
+
+  ;; -- sprzatanie zmiennych roboczych --
+  (setq taz_s_load_file_safe_path nil)
+  (setq taz_s_load_file_safe_found nil)
+  (setq taz_s_load_file_safe_handle nil)
+  (setq taz_s_load_file_safe_opened nil)
+  (setq taz_s_load_file_safe_line nil)
+  (setq taz_s_load_file_safe_has_data nil)
+  (setq taz_s_load_file_safe_skip nil)
+
+  (princ)
+)
+
+;; ---------------------------------------------------------
+;; taz_s_load_data_file
+;; Bezpieczne wczytanie pliku danych obiektow (taz_s_data_file)
+;; ---------------------------------------------------------
+(defun taz_s_load_data_file ()
+  (setq taz_s_load_file_safe_path taz_s_data_file)
+  (taz_s_load_file_safe)
+  (princ)
+)
+
+;; ---------------------------------------------------------
+;; taz_s_load_axes_data_file
+;; Bezpieczne wczytanie pliku danych osi (taz_s_axes_data_file)
+;; ---------------------------------------------------------
+(defun taz_s_load_axes_data_file ()
+  (setq taz_s_load_file_safe_path taz_s_axes_data_file)
+  (taz_s_load_file_safe)
+  (princ)
+)
+
+;; ---------------------------------------------------------
 ;; taz_s_cleanup_data_file
 ;; Czyści plik który został przypisany do zmiennej
 ;; taz_s_data_file wewnątrz katalogu danych projektu.
@@ -345,11 +456,11 @@
   (setq taz_s_dwg_path (getvar "DWGPREFIX"))
   (setq taz_s_data_file (strcat taz_s_dwg_path (substr (getvar "DWGNAME") 1 (- (strlen (getvar "DWGNAME")) 4)) "/" "taz_s_objects_data.txt"))
   (if (findfile taz_s_data_file)
-    (load taz_s_data_file)
+    (taz_s_load_data_file)
   )
   (setq taz_s_axes_data_file (strcat taz_s_dwg_path (substr (getvar "DWGNAME") 1 (- (strlen (getvar "DWGNAME")) 4)) "/" "taz_s_axes_data.txt"))
   (if (findfile taz_s_axes_data_file)
-    (load taz_s_axes_data_file)
+    (taz_s_load_axes_data_file)
   )
   
   ;; PARAMETRY PROJEKTU

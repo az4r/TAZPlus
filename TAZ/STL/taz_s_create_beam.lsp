@@ -455,7 +455,7 @@
   ;; Plik zawiera gotowe (setq ...) wiec load wystarczy
   ;; ---------------------------------------------------------
 
-  ;;(load taz_s_data_file)
+  ;;(taz_s_load_data_file)
 
   ;; ---------------------------------------------------------
   ;; WYCZYSZCZENIE ZMIENNYCH EDYCJI

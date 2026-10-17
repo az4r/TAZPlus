@@ -1193,7 +1193,7 @@
       (if (boundp 'taz_s_data_file)
         (progn
           (if (findfile taz_s_data_file)
-            (load taz_s_data_file)
+            (taz_s_load_data_file)
           )
         )
       )

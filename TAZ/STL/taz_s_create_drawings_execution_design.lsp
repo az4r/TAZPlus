@@ -328,10 +328,10 @@
   ;;(setq taz_s_y_data taz_s_axis_data_y)
   ;;(setq taz_s_z_data taz_s_axis_data_z)
   
-  ;;(load taz_s_data_file)
+  ;;(taz_s_load_data_file)
   
   (if (findfile taz_s_data_file)
-    (load taz_s_data_file)
+    (taz_s_load_data_file)
     (progn
       (setq taz_s_old_error *error*)
       (setq *error* (lambda (msg) (princ "")))

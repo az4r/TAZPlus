@@ -75,7 +75,7 @@
   ;; ZALADUJ BAZE (jak dotychczas - dane trafiaja do pamieci)
   ;; ---------------------------------------------------------
 
-  (load taz_s_data_file)
+  (taz_s_load_data_file)
 
   ;; ---------------------------------------------------------
   ;; WCZYTAJ PLIK LINIA PO LINII, POMIJAJAC WPISY USUWANEJ BRYLY

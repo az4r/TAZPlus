@@ -90,7 +90,7 @@
   (if taz_s_change_profile_ok
     (progn
       (setq taz_s_data_file (strcat (taz_s_path) "taz_s_objects_data.txt"))
-      (load taz_s_data_file)
+      (taz_s_load_data_file)
     )
     (princ)
   )

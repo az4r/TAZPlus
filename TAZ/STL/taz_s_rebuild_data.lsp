@@ -25,7 +25,7 @@
     (progn
 
       ;; -- 1. wczytujemy plik - w pamieci zostana tylko ostatnie wartosci --
-      (load taz_s_data_file)
+      (taz_s_load_data_file)
 
       ;; -- 2. szukamy bryl 3D na warstwie taz_s_beam oraz taz_s_plate--
       (setq taz_s_selection_set (ssget "_X" '((0 . "3DSOLID") (-4 . "<OR") (8 . "taz_s_beam") (8 . "taz_s_plate") (-4 . "OR>"))))
