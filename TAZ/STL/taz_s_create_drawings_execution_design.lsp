@@ -319,6 +319,8 @@
       "_DRAWINGS.dwg"
     )
   )
+  
+  (taz_s_explode_blocks_for_drawings)
 
   ;; ---------------------------------
   ;; WCZYTANIE DANYCH
