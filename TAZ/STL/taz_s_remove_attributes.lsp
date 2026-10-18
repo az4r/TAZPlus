@@ -72,6 +72,22 @@
         (strcat "taz_s_" taz_s_delete_object_handle "_"))
 
   ;; ---------------------------------------------------------
+  ;; PRZENIES BRYLE NA WARSTWE taz_s_unassigned
+  ;; Bryla bez atrybutow nie moze zostac na warstwie taz_s_beam
+  ;; ani taz_s_plate (taz_s_rebuild_data wysypuje sie na bryle bez
+  ;; danych). Warstwy TAZ sa domyslnie zablokowane, wiec na czas
+  ;; zmiany odblokowujemy wszystkie i blokujemy je ponownie.
+  ;; Robimy to PRZED usunieciem danych - jezeli w tym miejscu
+  ;; wystapi blad, dane bryly zostaja nietkniete.
+  ;; ---------------------------------------------------------
+
+  (taz_s_unlock_all_layers)
+
+  (command "_.CHPROP" taz_s_delete_object "" "LA" "taz_s_unassigned" "")
+
+  (taz_s_lock_all_layers)
+
+  ;; ---------------------------------------------------------
   ;; ZALADUJ BAZE (jak dotychczas - dane trafiaja do pamieci)
   ;; ---------------------------------------------------------
 
