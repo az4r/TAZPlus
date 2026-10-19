@@ -308,14 +308,16 @@
 ;; ---------------------------------------------------------
 
 (defun taz_s_explode_blocks_for_drawings ()
+  (taz_s_unlock_all_layers)
   (setq taz_s_explode_blocks_for_drawings_ss (ssget "_X" '((0 . "INSERT") (8 . "taz_s_unassigned"))))
   (if taz_s_explode_blocks_for_drawings_ss
     (repeat (setq taz_s_explode_blocks_for_drawings_i (sslength taz_s_explode_blocks_for_drawings_ss))
-      (command "_.EXPLODE" (ssname taz_s_explode_blocks_for_drawings_ss (setq taz_s_explode_blocks_for_drawings_i (1- taz_s_explode_blocks_for_drawings_i))) "")
+      (command "_.EXPLODE" (ssname taz_s_explode_blocks_for_drawings_ss (setq taz_s_explode_blocks_for_drawings_i (1- taz_s_explode_blocks_for_drawings_i))))
     )
   )
   (setq taz_s_explode_blocks_for_drawings_ss nil)
   (setq taz_s_explode_blocks_for_drawings_i nil)
+  (taz_s_lock_all_layers)
   (princ)
 )
 
